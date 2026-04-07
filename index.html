@@ -235,7 +235,10 @@
 <div class="review-overlay" id="reviewOverlay">
   <div class="rv-top">
     <h2>📋 스캔 목록 확인</h2>
-    <button class="rv-close" onclick="closeReview()">← 뒤로</button>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-scan" style="height:34px;padding:0 11px;font-size:16px;border-radius:10px" onclick="resumeMoveScan()">📷</button>
+      <button class="rv-close" onclick="closeReview()">← 뒤로</button>
+    </div>
   </div>
   <div class="rv-body" id="rvBody"></div>
   <div class="rv-manual">
@@ -427,6 +430,23 @@ function closeScanner(){
 }
 
 function startMoveMode(){openScanner('move')}
+
+function resumeMoveScan(){
+  /* 리뷰에서 스캐너로 복귀 (기존 스캔 데이터 유지) */
+  document.getElementById('reviewOverlay').classList.remove('show');
+  scanMode='move';
+  scanned=false;lastCode='';matchCount=0;torchOn=false;lastConfirmedCode='';
+  scReadEl.textContent='';scCamInfoEl.textContent='';
+  document.getElementById('btnTorch').classList.remove('active');
+  document.getElementById('scTitle').textContent='📦 상품 이동 스캔';
+  document.getElementById('scCounter').classList.add('show');
+  document.getElementById('btnScanDone').classList.add('show');
+  document.getElementById('scCnt').textContent='스캔: '+moveScannedTotal+'건 ('+Object.keys(moveScannedItems).length+'종)';
+  document.getElementById('scLast').textContent='';
+  document.getElementById('scannerOverlay').classList.add('show');
+  histPush();
+  if(useNative)initAndroidScanner();else initIOSScanner();
+}
 
 function discoverCameras(){
   return navigator.mediaDevices.enumerateDevices().then(function(devs){
