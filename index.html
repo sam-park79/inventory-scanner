@@ -663,15 +663,21 @@ var _execMove=executeMove;
 executeMove=function(){
   var location=document.getElementById('locInput').value.trim();
 
+  /* 모달을 먼저 닫고 confirm 표시 (iOS Safari 호환) */
+  document.getElementById('locModal').classList.remove('show');
+
   /* 빈 입력 → 상품위치 삭제 확인 */
   if(!location){
-    if(!confirm('상품위치 정보를 삭제하시겠습니까?'))return;
+    if(!window.confirm('상품위치 정보를 삭제하시겠습니까?')){
+      /* 취소 → 모달 다시 열기 */
+      document.getElementById('locModal').classList.add('show');
+      return;
+    }
   }
 
   var cbs=document.querySelectorAll('.rv-cb:checked');
   var items=[];for(var i=0;i<cbs.length;i++){items.push({code:cbs[i].getAttribute('data-code')})}
 
-  document.getElementById('locModal').classList.remove('show');
   document.getElementById('procOverlay').classList.add('show');
   document.getElementById('procText').textContent=location
     ?items.length+'종 상품 → '+location+' 이동 처리 중...'
