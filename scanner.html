@@ -42,17 +42,22 @@
       border:2.5px solid var(--green);border-radius:16px;
       box-shadow:0 0 0 9999px rgba(0,0,0,.5)}
     .scan-line{position:absolute;left:8%;right:8%;height:2px;background:var(--green);
-      border-radius:2px;opacity:.7;-webkit-animation:scanAnim 2s ease-in-out infinite alternate;
-      animation:scanAnim 2s ease-in-out infinite alternate}
-    @-webkit-keyframes scanAnim{0%{top:15%}100%{top:85%}}
+      border-radius:2px;opacity:.7;-webkit-animation:scanAnim 2s ease-in-out infinite alternate;animation:scanAnim 2s ease-in-out infinite alternate}
     @keyframes scanAnim{0%{top:15%}100%{top:85%}}
+    #iosReader{flex:1;background:#000;display:none}
+    #iosReader video{-o-object-fit:cover!important;object-fit:cover!important}
+    #iosReader img[alt="Info icon"]{display:none!important}
+    #html5-qrcode-anchor-scan-type-change{display:none!important}
+    #html5-qrcode-button-camera-permission{
+      background:var(--accent)!important;color:#fff!important;border:none!important;
+      border-radius:12px!important;padding:12px 24px!important;font-size:15px!important;
+      font-family:var(--font)!important;cursor:pointer!important}
     .bottom-bar{position:fixed;bottom:0;left:0;right:0;z-index:20;
       background:rgba(15,17,23,.85);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
       padding:10px 16px;padding-bottom:max(10px,env(safe-area-inset-bottom));text-align:center}
     .hint{font-size:13px;color:var(--text2);line-height:1.4}
     .read-count{font-size:12px;color:var(--green);margin-top:3px;min-height:17px;font-weight:600}
-    .cam-info{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px;
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cam-info{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px}
     .ok-overlay{position:fixed;inset:0;background:rgba(15,17,23,.95);
       display:none;flex-direction:column;align-items:center;justify-content:center;
       z-index:100;padding:40px 20px;text-align:center}
@@ -64,7 +69,6 @@
     .ok-msg{font-size:14px;color:var(--text2);margin-bottom:24px}
     .ok-sp{width:24px;height:24px;border:3px solid var(--border);
       border-top-color:var(--green);border-radius:50%;-webkit-animation:sp .7s linear infinite;animation:sp .7s linear infinite}
-    @-webkit-keyframes sp{to{-webkit-transform:rotate(360deg);transform:rotate(360deg)}}
     @keyframes sp{to{transform:rotate(360deg)}}
     .err-full{position:fixed;inset:0;background:var(--bg);z-index:50;
       display:none;flex-direction:column;align-items:center;justify-content:center;
@@ -73,7 +77,7 @@
     .err-full .icon{font-size:56px;margin-bottom:20px;opacity:.6}
     .err-full p{font-size:15px;color:var(--text2);line-height:1.7;margin-bottom:20px}
     .err-full a{color:var(--accent);font-size:14px}
-    #cropCanvas,#hiddenDiv{display:none}
+    #cropCanvas{display:none}
   </style>
 </head>
 <body>
@@ -86,14 +90,17 @@
         <a class="btn-t" id="btnBack" href="#">닫기</a>
       </div>
     </div>
-    <div class="video-wrap"><video id="video" autoplay playsinline muted></video></div>
-    <div class="scan-overlay">
+    <div class="video-wrap" id="androidArea">
+      <video id="video" autoplay playsinline muted></video>
+    </div>
+    <div class="scan-overlay" id="scanOverlay">
       <div class="scan-guide"><div class="scan-line"></div></div>
     </div>
+    <div id="iosReader"></div>
     <div class="bottom-bar">
-      <div class="hint">바코드를 초록 영역에 비춰주세요</div>
+      <div class="hint">바코드를 카메라에 비춰주세요</div>
       <div class="read-count" id="readCount"></div>
-      <div class="cam-info" id="camInfo">카메라 로딩 중...</div>
+      <div class="cam-info" id="camInfo"></div>
     </div>
   </div>
 
@@ -103,285 +110,197 @@
     <div class="ok-msg">재고 조회 화면으로 이동합니다...</div>
     <div class="ok-sp"></div>
   </div>
-
   <div class="err-full" id="errFull">
     <div class="icon">📸</div>
     <p id="errMsg">카메라를 사용할 수 없습니다.</p>
     <a id="btnBackErr" href="#">돌아가기</a>
   </div>
-
   <canvas id="cropCanvas"></canvas>
-  <div id="hiddenDiv"></div>
 
 <script>
 var CONFIRM_COUNT = 3;
-var SCAN_INTERVAL_NATIVE = 100;  /* BarcodeDetector (Android) */
-var SCAN_INTERVAL_LIB = 250;    /* html5-qrcode 폴백 (iOS) — 더 느림 */
-
 var params = new URLSearchParams(window.location.search);
 var returnUrl = params.get('returnUrl') || '';
 document.getElementById('btnBack').href = returnUrl ? decodeURIComponent(returnUrl) : '#';
 document.getElementById('btnBackErr').href = returnUrl ? decodeURIComponent(returnUrl) : '#';
 
-var video = document.getElementById('video');
-var cropCanvas = document.getElementById('cropCanvas');
-var cropCtx = cropCanvas.getContext('2d');
 var readCountEl = document.getElementById('readCount');
 var camInfoEl = document.getElementById('camInfo');
-
-var videoTrack = null;
-var torchOn = false;
 var scanned = false;
-var scanTimer = null;
 var lastCode = '';
 var matchCount = 0;
+var torchOn = false;
 
-/* ── 디코더 선택 ── */
+/* 조명 제어용 — 양쪽 모드 공통 */
+var activeTrack = null;
+
 var useNative = 'BarcodeDetector' in window;
-var nativeDetector = null;
-var libDecoder = null;
-var libBusy = false;
+if (useNative) initAndroid(); else initIOS();
 
-/* ══════════════════════════════════════
-   카메라 관리
-   ══════════════════════════════════════ */
-
-var rearCameras = [];
-var currentCamIndex = 0;
-
-function discoverCameras() {
-  return navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'environment' }, audio: false
-  }).then(function(tmp) {
-    tmp.getTracks().forEach(function(t) { t.stop(); });
-    return navigator.mediaDevices.enumerateDevices();
-  }).then(function(devices) {
-    var allVideo = devices.filter(function(d) { return d.kind === 'videoinput'; });
-    rearCameras = allVideo.filter(function(d) {
-      var lbl = (d.label || '').toLowerCase();
-      return lbl.indexOf('front') < 0 && lbl.indexOf('전면') < 0 && lbl.indexOf('selfie') < 0;
-    });
-    if (rearCameras.length === 0) rearCameras = allVideo;
-
-    var savedId = '';
-    try { savedId = localStorage.getItem('SCAN_CAM_ID') || ''; } catch(e) {}
-    if (savedId) {
-      var idx = -1;
-      for (var i = 0; i < rearCameras.length; i++) {
-        if (rearCameras[i].deviceId === savedId) { idx = i; break; }
-      }
-      if (idx >= 0) currentCamIndex = idx;
-    }
-  });
-}
-
-function startCameraByIndex(index) {
-  stopCamera();
-  var cam = rearCameras[index];
-  if (!cam) return Promise.reject('no camera');
-
-  return navigator.mediaDevices.getUserMedia({
-    video: { deviceId: { exact: cam.deviceId } }, audio: false
-  }).catch(function() {
-    return navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' }, audio: false
-    });
-  }).then(function(stream) {
-    video.srcObject = stream;
-    videoTrack = stream.getVideoTracks()[0];
-
-    var settings = videoTrack.getSettings ? videoTrack.getSettings() : {};
-    var label = videoTrack.label || cam.label || ('카메라 ' + (index + 1));
-    camInfoEl.textContent = label + ' (' + (settings.width || '?') + 'x' + (settings.height || '?') + ')';
-
-    try { localStorage.setItem('SCAN_CAM_ID', cam.deviceId); } catch(e) {}
-
-    return video.play();
-  }).then(function() {
-    if (!scanned) startScanning();
-  });
-}
-
-function switchCamera() {
-  if (rearCameras.length <= 1) {
-    camInfoEl.textContent = '전환 가능한 카메라가 없습니다';
-    return;
-  }
-  currentCamIndex = (currentCamIndex + 1) % rearCameras.length;
-  lastCode = ''; matchCount = 0; readCountEl.textContent = '';
-  torchOn = false;
-  document.getElementById('btnTorch').classList.remove('active');
-  camInfoEl.textContent = '전환 중... (' + (currentCamIndex + 1) + '/' + rearCameras.length + ')';
-  startCameraByIndex(currentCamIndex);
-}
-
-/* ══════════════════════════════════════
-   초기화
-   ══════════════════════════════════════ */
-
-function init() {
-  /* 디코더 초기화 */
-  if (useNative) {
-    nativeDetector = new BarcodeDetector({
-      formats: ['code_128','code_39','ean_13','ean_8',
-                'upc_a','upc_e','itf','code_93','codabar','qr_code']
-    });
-  } else {
-    /* iOS 폴백: html5-qrcode */
-    libDecoder = new Html5Qrcode('hiddenDiv');
-  }
-
-  discoverCameras().then(function() {
-    if (rearCameras.length === 0) {
-      showError('사용 가능한 카메라가 없습니다.');
-      return;
-    }
-    document.getElementById('btnSwitch').textContent = '🔄 전환 (' + rearCameras.length + '대)';
-    return startCameraByIndex(currentCamIndex);
-  }).catch(function(err) {
-    showError('카메라를 사용할 수 없습니다.<br>브라우저 설정에서 카메라 권한을 허용해 주세요.');
-  });
-}
-
-/* ══════════════════════════════════════
-   스캔 루프
-   ══════════════════════════════════════ */
-
-function startScanning() {
-  if (scanTimer) clearInterval(scanTimer);
-  var interval = useNative ? SCAN_INTERVAL_NATIVE : SCAN_INTERVAL_LIB;
-  scanTimer = setInterval(function() {
-    if (scanned || video.readyState < 2) return;
-    scanFrame();
-  }, interval);
-}
-
-function scanFrame() {
-  var vw = video.videoWidth;
-  var vh = video.videoHeight;
-  if (!vw || !vh) return;
-
-  /* 스캔 가이드 영역만 크롭 */
-  var guideW = vw * 0.90;
-  var guideH = guideW / 1.8;
-  var guideX = (vw - guideW) / 2;
-  var guideY = (vh - guideH) / 2;
-
-  cropCanvas.width = guideW;
-  cropCanvas.height = guideH;
-  cropCtx.drawImage(video, guideX, guideY, guideW, guideH, 0, 0, guideW, guideH);
-
-  if (useNative) {
-    scanWithNative();
-  } else {
-    scanWithLib();
-  }
-}
-
-/* ── Android: BarcodeDetector (네이티브) ── */
-function scanWithNative() {
-  nativeDetector.detect(cropCanvas).then(function(results) {
-    if (results.length > 0) {
-      onCodeRead(results[0].rawValue);
-    } else {
-      resetIfNeeded();
-    }
-  }).catch(function() {});
-}
-
-/* ── iOS: html5-qrcode (라이브러리 폴백) ── */
-function scanWithLib() {
-  if (libBusy) return;
-  libBusy = true;
-
-  cropCanvas.toBlob(function(blob) {
-    if (!blob) { libBusy = false; return; }
-
-    var file = new File([blob], 'frame.jpg', { type: 'image/jpeg' });
-
-    libDecoder.scanFile(file, false).then(function(decoded) {
-      libBusy = false;
-      if (decoded) onCodeRead(decoded);
-    }).catch(function() {
-      libBusy = false;
-      resetIfNeeded();
-    });
-  }, 'image/jpeg', 0.85);
-}
-
-function resetIfNeeded() {
-  if (matchCount > 0) {
-    matchCount = 0;
-    lastCode = '';
-    readCountEl.textContent = '';
-  }
-}
-
-function onCodeRead(code) {
-  if (code === lastCode) { matchCount++; }
-  else { lastCode = code; matchCount = 1; }
-  readCountEl.textContent = '✓ ' + code + ' (' + matchCount + '/' + CONFIRM_COUNT + ')';
-  if (matchCount >= CONFIRM_COUNT) onScanConfirmed(code);
-}
-
-/* ══════════════════════════════════════
-   확정
-   ══════════════════════════════════════ */
-
-function onScanConfirmed(code) {
-  if (scanned) return;
-  scanned = true;
-  if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
-  if (navigator.vibrate) navigator.vibrate(150);
-  document.getElementById('okCode').textContent = code;
-  document.getElementById('okOverlay').classList.add('show');
-  stopCamera();
-  if (returnUrl) {
-    var url = decodeURIComponent(returnUrl);
-    var sep = url.indexOf('?') >= 0 ? '&' : '?';
-    setTimeout(function() {
-      window.location.href = url + sep + 'code=' + encodeURIComponent(code);
-    }, 800);
-  }
-}
-
-/* ══════════════════════════════════════
-   카메라 제어
-   ══════════════════════════════════════ */
+/* ══ 공통: 조명 토글 ══ */
 
 function toggleTorch() {
-  if (!videoTrack) return;
+  if (!activeTrack) {
+    /* iOS: html5-qrcode 내부 비디오에서 트랙 가져오기 */
+    try {
+      var vid = document.querySelector('#iosReader video');
+      if (vid && vid.srcObject) activeTrack = vid.srcObject.getVideoTracks()[0];
+    } catch(e) {}
+  }
+  if (!activeTrack) return;
   try {
-    var caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+    var caps = activeTrack.getCapabilities ? activeTrack.getCapabilities() : {};
     if (!caps.torch) return;
     torchOn = !torchOn;
-    videoTrack.applyConstraints({ advanced: [{ torch: torchOn }] }).then(function() {
+    activeTrack.applyConstraints({ advanced: [{ torch: torchOn }] }).then(function() {
       document.getElementById('btnTorch').classList.toggle('active', torchOn);
     }).catch(function() { torchOn = false; });
   } catch(e) {}
 }
 
-function stopCamera() {
-  if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
-  if (video.srcObject) {
-    video.srcObject.getTracks().forEach(function(t) { t.stop(); });
-    video.srcObject = null;
+/* ══════════════════════════════════════
+   Android
+   ══════════════════════════════════════ */
+
+var video, cropCanvas, cropCtx, nativeDetector, scanTimer;
+var rearCameras = [], currentCamIndex = 0;
+
+function initAndroid() {
+  document.getElementById('iosReader').style.display = 'none';
+  video = document.getElementById('video');
+  cropCanvas = document.getElementById('cropCanvas');
+  cropCtx = cropCanvas.getContext('2d');
+  nativeDetector = new BarcodeDetector({
+    formats: ['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','code_93','codabar','qr_code']
+  });
+  discoverCameras().then(function() {
+    if (!rearCameras.length) { showError('카메라를 찾을 수 없습니다.'); return; }
+    document.getElementById('btnSwitch').textContent = '🔄 전환 (' + rearCameras.length + '대)';
+    return startCamIdx(currentCamIndex);
+  }).catch(function() { showError('카메라 권한을 확인해 주세요.'); });
+}
+
+function discoverCameras() {
+  return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
+  .then(function(t) { t.getTracks().forEach(function(x){x.stop()}); return navigator.mediaDevices.enumerateDevices(); })
+  .then(function(devs) {
+    var all = devs.filter(function(d){return d.kind==='videoinput'});
+    rearCameras = all.filter(function(d){ var l=(d.label||'').toLowerCase(); return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0; });
+    if (!rearCameras.length) rearCameras = all;
+    var s=''; try{s=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
+    if(s){for(var i=0;i<rearCameras.length;i++){if(rearCameras[i].deviceId===s){currentCamIndex=i;break}}}
+  });
+}
+
+function startCamIdx(idx) {
+  stopAndroid();
+  var cam = rearCameras[idx]; if(!cam) return Promise.reject();
+  return navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:cam.deviceId}},audio:false})
+  .catch(function(){return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})})
+  .then(function(stream) {
+    video.srcObject=stream; activeTrack=stream.getVideoTracks()[0];
+    var s=activeTrack.getSettings?activeTrack.getSettings():{};
+    camInfoEl.textContent=(activeTrack.label||'')+' ('+(s.width||'?')+'x'+(s.height||'?')+')';
+    try{localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}
+    return video.play();
+  }).then(function(){if(!scanned)startAndroidScan()});
+}
+
+function startAndroidScan() {
+  if(scanTimer)clearInterval(scanTimer);
+  scanTimer=setInterval(function(){
+    if(scanned||video.readyState<2)return;
+    var vw=video.videoWidth,vh=video.videoHeight; if(!vw||!vh)return;
+    var gw=vw*.9,gh=gw/1.8,gx=(vw-gw)/2,gy=(vh-gh)/2;
+    cropCanvas.width=gw;cropCanvas.height=gh;
+    cropCtx.drawImage(video,gx,gy,gw,gh,0,0,gw,gh);
+    nativeDetector.detect(cropCanvas).then(function(r){
+      if(r.length>0)onCodeRead(r[0].rawValue);else resetMatch();
+    }).catch(function(){});
+  },100);
+}
+
+function switchCamera() {
+  if(!useNative)return;
+  if(rearCameras.length<=1){camInfoEl.textContent='전환 가능한 카메라가 없습니다';return}
+  currentCamIndex=(currentCamIndex+1)%rearCameras.length;
+  resetMatch();torchOn=false;document.getElementById('btnTorch').classList.remove('active');
+  startCamIdx(currentCamIndex);
+}
+
+function stopAndroid() {
+  if(scanTimer){clearInterval(scanTimer);scanTimer=null}
+  if(video&&video.srcObject){video.srcObject.getTracks().forEach(function(t){t.stop()});video.srcObject=null}
+  activeTrack=null;
+}
+
+/* ══════════════════════════════════════
+   iOS
+   ══════════════════════════════════════ */
+
+var iosScanner = null;
+
+function initIOS() {
+  document.getElementById('androidArea').style.display = 'none';
+  document.getElementById('scanOverlay').style.display = 'none';
+  document.getElementById('btnSwitch').style.display = 'none';
+  document.getElementById('iosReader').style.display = 'block';
+  camInfoEl.textContent = 'iOS 모드';
+
+  iosScanner = new Html5Qrcode('iosReader');
+  iosScanner.start(
+    { facingMode: 'environment' },
+    {
+      fps: 10,
+      qrbox: function(vw, vh) { var w=Math.min(vw*.88,400); return {width:Math.floor(w),height:Math.floor(w*.5)}; },
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.ITF, Html5QrcodeSupportedFormats.CODE_93,
+        Html5QrcodeSupportedFormats.QR_CODE
+      ]
+    },
+    function(decoded) { onCodeRead(decoded); },
+    function() {}
+  ).then(function() {
+    /* 스캔 시작 후 비디오 트랙 참조 (조명용) */
+    try {
+      var vid = document.querySelector('#iosReader video');
+      if (vid && vid.srcObject) activeTrack = vid.srcObject.getVideoTracks()[0];
+    } catch(e) {}
+  }).catch(function(err) {
+    showError('카메라를 사용할 수 없습니다.<br>' + err);
+  });
+}
+
+/* ══ 공통 ══ */
+
+function onCodeRead(code) {
+  if(scanned)return;
+  if(code===lastCode){matchCount++}else{lastCode=code;matchCount=1}
+  readCountEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
+  if(matchCount>=CONFIRM_COUNT)onScanConfirmed(code);
+}
+function resetMatch(){if(matchCount>0){matchCount=0;lastCode='';readCountEl.textContent=''}}
+
+function onScanConfirmed(code) {
+  if(scanned)return; scanned=true;
+  if(useNative)stopAndroid(); else{try{iosScanner.stop()}catch(e){}}
+  if(navigator.vibrate)navigator.vibrate(150);
+  document.getElementById('okCode').textContent=code;
+  document.getElementById('okOverlay').classList.add('show');
+  if(returnUrl){
+    var url=decodeURIComponent(returnUrl);
+    var sep=url.indexOf('?')>=0?'&':'?';
+    setTimeout(function(){window.location.href=url+sep+'code='+encodeURIComponent(code)},800);
   }
-  videoTrack = null;
 }
 
-function showError(msg) {
-  document.getElementById('errMsg').innerHTML = msg;
-  document.getElementById('errFull').classList.add('show');
-}
+function showError(msg){document.getElementById('errMsg').innerHTML=msg;document.getElementById('errFull').classList.add('show')}
 
-/* ── 시작 ── */
-init();
-
-window.addEventListener('beforeunload', stopCamera);
-document.addEventListener('visibilitychange', function() {
-  if (document.hidden) { stopCamera(); }
-  else if (!scanned) { scanned = false; lastCode = ''; matchCount = 0; startCameraByIndex(currentCamIndex); }
+window.addEventListener('beforeunload',function(){
+  if(useNative)stopAndroid();else{try{iosScanner.stop()}catch(e){}}
 });
 </script>
 </body>
