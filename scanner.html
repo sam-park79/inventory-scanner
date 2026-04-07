@@ -50,6 +50,7 @@
     .hint{font-size:13px;color:var(--text2)}
     .read-count{font-size:12px;color:var(--green);margin-top:3px;min-height:17px;font-weight:600}
     .cam-info{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px}
+    .debug{font-size:9px;color:rgba(255,100,100,.5);margin-top:2px;max-height:40px;overflow:hidden}
     .ok-overlay{position:fixed;inset:0;background:rgba(15,17,23,.95);
       display:none;flex-direction:column;align-items:center;justify-content:center;
       z-index:100;padding:40px 20px;text-align:center}
@@ -87,6 +88,7 @@
       <div class="hint">바코드를 카메라에 비춰주세요</div>
       <div class="read-count" id="readCount"></div>
       <div class="cam-info" id="camInfo"></div>
+      <div class="debug" id="debug"></div>
     </div>
   </div>
   <div class="ok-overlay" id="okOverlay">
@@ -108,71 +110,84 @@ document.getElementById('btnBackErr').href=returnUrl?decodeURIComponent(returnUr
 
 var readCountEl=document.getElementById('readCount');
 var camInfoEl=document.getElementById('camInfo');
+var debugEl=document.getElementById('debug');
 var scanned=false,lastCode='',matchCount=0,torchOn=false;
 var activeTrack=null;
 var useNative='BarcodeDetector' in window;
 
+function dbg(msg){debugEl.textContent=msg;console.log('[SCAN]',msg)}
+
 /* ══════════════════════════════════════
-   피드백 (확정 시에만)
-   - 진동: Android에서 동작
-   - 비프음: 모든 기기에서 동작, 볼륨 최대
+   피드백 — 확정 시에만
    ══════════════════════════════════════ */
-var audioCtx=null;
 
-function playConfirmFeedback(){
-  /* 진동 */
-  try{if(navigator.vibrate)navigator.vibrate([150,80,150])}catch(e){}
+/* AudioContext를 페이지 로드 시 즉시 생성 */
+var audioCtx;
+try{audioCtx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}
 
-  /* 비프음 — 볼륨 최대 */
-  try{
-    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-    /* iOS AudioContext 잠금 해제 */
-    if(audioCtx.state==='suspended')audioCtx.resume();
+/* 사용자 제스처 시 AudioContext unlock (iOS/Android 공통) */
+function unlockAudio(){
+  if(audioCtx&&audioCtx.state==='suspended'){
+    audioCtx.resume().catch(function(){});
+  }
+}
+document.addEventListener('touchstart',unlockAudio,{passive:true});
+document.addEventListener('click',unlockAudio,{passive:true});
 
-    var now=audioCtx.currentTime;
+function playBeep(){
+  if(!audioCtx)return;
+  unlockAudio();
 
-    /* 상승 톤 (삐-삑) */
-    var osc1=audioCtx.createOscillator();
-    var gain1=audioCtx.createGain();
-    osc1.connect(gain1);gain1.connect(audioCtx.destination);
-    osc1.type='square';
-    osc1.frequency.value=1000;
-    gain1.gain.value=1.0;
-    osc1.start(now);osc1.stop(now+0.12);
+  /* 짧은 딜레이 후 재생 (resume 완료 대기) */
+  setTimeout(function(){
+    try{
+      var now=audioCtx.currentTime;
 
-    var osc2=audioCtx.createOscillator();
-    var gain2=audioCtx.createGain();
-    osc2.connect(gain2);gain2.connect(audioCtx.destination);
-    osc2.type='square';
-    osc2.frequency.value=1400;
-    gain2.gain.value=1.0;
-    osc2.start(now+0.15);osc2.stop(now+0.3);
-  }catch(e){}
+      var osc1=audioCtx.createOscillator();
+      var g1=audioCtx.createGain();
+      osc1.type='square';
+      osc1.frequency.value=1000;
+      g1.gain.value=1.0;
+      osc1.connect(g1);g1.connect(audioCtx.destination);
+      osc1.start(now);osc1.stop(now+0.12);
+
+      var osc2=audioCtx.createOscillator();
+      var g2=audioCtx.createGain();
+      osc2.type='square';
+      osc2.frequency.value=1500;
+      g2.gain.value=1.0;
+      osc2.connect(g2);g2.connect(audioCtx.destination);
+      osc2.start(now+0.15);osc2.stop(now+0.3);
+    }catch(e){dbg('beep err: '+e)}
+  },50);
 }
 
-/* iOS AudioContext는 사용자 제스처 후에만 활성화됨 — 터치 시 미리 unlock */
-document.addEventListener('touchstart',function(){
-  try{
-    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-    if(audioCtx.state==='suspended')audioCtx.resume();
-  }catch(e){}
-},{once:true});
+function doVibrate(){
+  if(navigator.vibrate){
+    navigator.vibrate([150,80,150]);
+  }
+}
+
+function confirmFeedback(){
+  doVibrate();
+  playBeep();
+}
 
 /* ══ 공통: 카메라 목록 ══ */
 var allCameras=[],currentCamIndex=0;
 
-function discoverCameras(){
-  return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})
-  .then(function(t){t.getTracks().forEach(function(x){x.stop()});return navigator.mediaDevices.enumerateDevices()})
-  .then(function(devs){
+function discoverCamerasOnly(){
+  return navigator.mediaDevices.enumerateDevices().then(function(devs){
     allCameras=devs.filter(function(d){
       if(d.kind!=='videoinput')return false;
       var l=(d.label||'').toLowerCase();
       return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0;
     });
     if(!allCameras.length)allCameras=devs.filter(function(d){return d.kind==='videoinput'});
+    dbg('카메라 '+allCameras.length+'대: '+allCameras.map(function(c){return c.label||c.deviceId}).join(', '));
     var s='';try{s=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
     if(s){for(var i=0;i<allCameras.length;i++){if(allCameras[i].deviceId===s){currentCamIndex=i;break}}}
+    if(allCameras.length>0)document.getElementById('btnSwitch').textContent='🔄 전환 ('+allCameras.length+'대)';
   });
 }
 
@@ -181,10 +196,9 @@ function switchCamera(){
   currentCamIndex=(currentCamIndex+1)%allCameras.length;
   resetMatch();torchOn=false;document.getElementById('btnTorch').classList.remove('active');
   camInfoEl.textContent='전환 중... ('+(currentCamIndex+1)+'/'+allCameras.length+')';
-  if(useNative)startAndroidCam(currentCamIndex);else startIOSCam(currentCamIndex);
+  if(useNative)startAndroidCam(currentCamIndex);else restartIOSCam(currentCamIndex);
 }
 
-/* ══ 공통: 조명 ══ */
 function toggleTorch(){
   if(!activeTrack){
     try{var v=document.querySelector('#iosReader video');
@@ -212,17 +226,19 @@ function resetMatch(){matchCount=0;lastCode='';readCountEl.textContent=''}
 
 function onScanConfirmed(code){
   if(scanned)return;scanned=true;
-  if(useNative)stopAndroid();else{try{iosScanner.stop()}catch(e){}}
 
-  /* 확정 시 피드백 */
-  playConfirmFeedback();
+  /* 피드백 먼저 실행 */
+  confirmFeedback();
+
+  /* 스캔 중지 */
+  if(useNative)stopAndroid();else{try{iosScanner.stop()}catch(e){}}
 
   document.getElementById('okCode').textContent=code;
   document.getElementById('okOverlay').classList.add('show');
   if(returnUrl){
     var url=decodeURIComponent(returnUrl);
     var sep=url.indexOf('?')>=0?'&':'?';
-    setTimeout(function(){window.location.href=url+sep+'code='+encodeURIComponent(code)},800);
+    setTimeout(function(){window.location.href=url+sep+'code='+encodeURIComponent(code)},1000);
   }
 }
 
@@ -239,11 +255,28 @@ function initAndroid(){
   nativeDetector=new BarcodeDetector({
     formats:['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','code_93','codabar','qr_code']
   });
-  discoverCameras().then(function(){
-    if(!allCameras.length){showError('카메라를 찾을 수 없습니다.');return}
-    document.getElementById('btnSwitch').textContent='🔄 전환 ('+allCameras.length+'대)';
-    return startAndroidCam(currentCamIndex);
-  }).catch(function(){showError('카메라 권한을 확인해 주세요.')});
+
+  /* 먼저 카메라 시작 → 이후 목록 수집 */
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})
+  .then(function(stream){
+    video.srcObject=stream;activeTrack=stream.getVideoTracks()[0];
+    camInfoEl.textContent=activeTrack.label||'카메라';
+    return video.play();
+  })
+  .then(function(){
+    /* 카메라 목록 수집 (label 접근 위해 스트림 활성 상태에서) */
+    return discoverCamerasOnly();
+  })
+  .then(function(){
+    /* 저장된 카메라가 현재와 다르면 전환 */
+    if(allCameras.length>0&&currentCamIndex>0){
+      startAndroidCam(currentCamIndex);
+    }else{
+      /* 현재 카메라 유지, 스캔 시작 */
+      startAndroidScan();
+    }
+  })
+  .catch(function(err){showError('카메라 권한을 확인해 주세요.<br>'+err)});
 }
 
 function startAndroidCam(idx){
@@ -256,20 +289,21 @@ function startAndroidCam(idx){
     camInfoEl.textContent=(activeTrack.label||'카메라 '+(idx+1))+' ('+(s.width||'?')+'x'+(s.height||'?')+')';
     try{localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}
     return video.play();
-  }).then(function(){
-    if(!scanned){if(scanTimer)clearInterval(scanTimer);
-      scanTimer=setInterval(function(){
-        if(scanned||video.readyState<2)return;
-        var vw=video.videoWidth,vh=video.videoHeight;if(!vw||!vh)return;
-        var gw=vw*.9,gh=gw/1.8,gx=(vw-gw)/2,gy=(vh-gh)/2;
-        cropCanvas.width=gw;cropCanvas.height=gh;
-        cropCtx.drawImage(video,gx,gy,gw,gh,0,0,gw,gh);
-        nativeDetector.detect(cropCanvas).then(function(r){
-          if(r.length>0)onCodeRead(r[0].rawValue);else resetMatch();
-        }).catch(function(){});
-      },100);
-    }
-  });
+  }).then(function(){startAndroidScan()});
+}
+
+function startAndroidScan(){
+  if(scanTimer)clearInterval(scanTimer);
+  scanTimer=setInterval(function(){
+    if(scanned||video.readyState<2)return;
+    var vw=video.videoWidth,vh=video.videoHeight;if(!vw||!vh)return;
+    var gw=vw*.9,gh=gw/1.8,gx=(vw-gw)/2,gy=(vh-gh)/2;
+    cropCanvas.width=gw;cropCanvas.height=gh;
+    cropCtx.drawImage(video,gx,gy,gw,gh,0,0,gw,gh);
+    nativeDetector.detect(cropCanvas).then(function(r){
+      if(r.length>0)onCodeRead(r[0].rawValue);else resetMatch();
+    }).catch(function(){});
+  },100);
 }
 
 function stopAndroid(){
@@ -280,71 +314,98 @@ function stopAndroid(){
 
 /* ══════════════════════════════════════
    iOS: html5-qrcode
-   - 첫 시작: facingMode로 안정적 시작
-   - 전환: deviceId로 특정 카메라 지정
+   - 즉시 facingMode로 시작 (사전 카메라 탐색 안 함)
+   - qrbox 없음 (전체 프레임 스캔)
+   - 시작 후 카메라 목록 수집
    ══════════════════════════════════════ */
-var iosScanner=null;
-var iosStarted=false;
+var iosScanner=null,iosRunning=false;
 
 function initIOS(){
   document.getElementById('androidArea').style.display='none';
   document.getElementById('scanOverlay').style.display='none';
   document.getElementById('iosReader').style.display='block';
+
   iosScanner=new Html5Qrcode('iosReader');
+  dbg('iOS: html5-qrcode 시작...');
 
-  discoverCameras().then(function(){
-    document.getElementById('btnSwitch').textContent='🔄 전환 ('+allCameras.length+'대)';
-    /* iOS 첫 시작: facingMode 사용 (가장 안정적) */
-    return startIOSWithFacingMode();
-  }).catch(function(err){showError('카메라 권한을 확인해 주세요.<br>'+err)});
-}
-
-function startIOSWithFacingMode(){
-  return iosScanner.start(
+  /* facingMode로 즉시 시작 — 사전 getUserMedia 없음 */
+  iosScanner.start(
     {facingMode:'environment'},
-    {fps:15,qrbox:function(vw,vh){var w=Math.min(vw*.85,380);return{width:Math.floor(w),height:Math.floor(w*.55)}}},
-    function(decoded){onCodeRead(decoded)},
-    function(){}
+    {fps:15},
+    function onSuccess(decoded,result){
+      dbg('읽힘: '+decoded);
+      onCodeRead(decoded);
+    },
+    function onErr(msg){
+      /* 프레임별 에러 — 무시 (바코드 없는 프레임) */
+    }
   ).then(function(){
-    iosStarted=true;
+    iosRunning=true;
+    dbg('iOS: 스캐너 시작됨');
+
+    /* 카메라 트랙 참조 */
     try{var v=document.querySelector('#iosReader video');
       if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
         var s=activeTrack.getSettings?activeTrack.getSettings():{};
         camInfoEl.textContent=(activeTrack.label||'후면 카메라')+' ('+(s.width||'?')+'x'+(s.height||'?')+')'}}catch(e){}
+
+    /* 스캐너 실행 중에 카메라 목록 수집 */
+    return discoverCamerasOnly();
+  }).catch(function(err){
+    dbg('iOS 시작 실패: '+err);
+    showError('카메라를 시작할 수 없습니다.<br>'+err);
   });
 }
 
-function startIOSCam(idx){
+function restartIOSCam(idx){
   var cam=allCameras[idx];if(!cam)return;
 
-  var doStart=function(){
-    iosScanner.start(
-      cam.deviceId,
-      {fps:15,qrbox:function(vw,vh){var w=Math.min(vw*.85,380);return{width:Math.floor(w),height:Math.floor(w*.55)}}},
-      function(decoded){onCodeRead(decoded)},
-      function(){}
-    ).then(function(){
-      iosStarted=true;activeTrack=null;
-      try{var v=document.querySelector('#iosReader video');
-        if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
-          var s=activeTrack.getSettings?activeTrack.getSettings():{};
-          camInfoEl.textContent=(activeTrack.label||'카메라 '+(idx+1))+' ('+(s.width||'?')+'x'+(s.height||'?')+')'}}catch(e){}
-      try{localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}
-    }).catch(function(){camInfoEl.textContent='카메라 전환 실패'});
-  };
-
-  if(iosStarted){
-    iosScanner.stop().then(function(){iosStarted=false;setTimeout(doStart,300)}).catch(function(){setTimeout(doStart,300)});
+  if(iosRunning){
+    iosScanner.stop().then(function(){
+      iosRunning=false;
+      setTimeout(function(){doStartIOS(cam.deviceId,idx)},300);
+    }).catch(function(){
+      iosRunning=false;
+      setTimeout(function(){doStartIOS(cam.deviceId,idx)},300);
+    });
   }else{
-    doStart();
+    doStartIOS(cam.deviceId,idx);
   }
 }
 
+function doStartIOS(deviceId,idx){
+  iosScanner.start(
+    deviceId,
+    {fps:15},
+    function(decoded){dbg('읽힘: '+decoded);onCodeRead(decoded)},
+    function(){}
+  ).then(function(){
+    iosRunning=true;activeTrack=null;
+    try{var v=document.querySelector('#iosReader video');
+      if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
+        var s=activeTrack.getSettings?activeTrack.getSettings():{};
+        camInfoEl.textContent=(activeTrack.label||'카메라 '+(idx+1))+' ('+(s.width||'?')+'x'+(s.height||'?')+')'}}catch(e){}
+    try{localStorage.setItem('SCAN_CAM_ID',deviceId)}catch(e){}
+  }).catch(function(err){
+    dbg('전환 실패: '+err);
+    camInfoEl.textContent='전환 실패 — facingMode로 복구 중...';
+    /* 폴백: facingMode로 재시작 */
+    iosScanner.start({facingMode:'environment'},{fps:15},
+      function(d){onCodeRead(d)},function(){})
+    .then(function(){iosRunning=true;camInfoEl.textContent='기본 후면 카메라'})
+    .catch(function(e2){showError('카메라 복구 실패: '+e2)});
+  });
+}
+
 /* ══ 초기화 ══ */
+dbg('mode: '+(useNative?'Android (BarcodeDetector)':'iOS (html5-qrcode)'));
 if(useNative)initAndroid();else initIOS();
 
 function showError(msg){document.getElementById('errMsg').innerHTML=msg;document.getElementById('errFull').classList.add('show')}
-window.addEventListener('beforeunload',function(){if(useNative)stopAndroid();else if(iosStarted){try{iosScanner.stop()}catch(e){}}});
+window.addEventListener('beforeunload',function(){
+  if(useNative)stopAndroid();
+  else if(iosRunning){try{iosScanner.stop()}catch(e){}}
+});
 </script>
 </body>
 </html>
