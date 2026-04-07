@@ -18,9 +18,7 @@
     }
     html,body{height:100%;background:#000;color:var(--text);font-family:var(--font);
       font-size:15px;overflow:hidden;user-select:none}
-
     .wrap{display:flex;flex-direction:column;height:100dvh}
-
     .top{display:flex;justify-content:space-between;align-items:center;
       padding:10px 16px;background:rgba(15,17,23,.85);position:fixed;top:0;left:0;right:0;z-index:20;
       padding-top:max(10px,env(safe-area-inset-top))}
@@ -33,11 +31,9 @@
     .btn-t:active{background:rgba(255,255,255,.2)}
     .btn-t.active{background:rgba(251,191,36,.9);color:#000;border-color:transparent}
     a.btn-t{text-decoration:none}
-
     .video-wrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;
       background:#000;overflow:hidden}
     #video{width:100%;height:100%;object-fit:cover}
-
     .scan-overlay{position:fixed;inset:0;z-index:10;pointer-events:none;
       display:flex;align-items:center;justify-content:center}
     .scan-guide{position:relative;width:90%;max-width:440px;aspect-ratio:1.8/1;
@@ -46,13 +42,12 @@
     .scan-line{position:absolute;left:8%;right:8%;height:2px;background:var(--green);
       border-radius:2px;opacity:.7;animation:scanAnim 2s ease-in-out infinite alternate}
     @keyframes scanAnim{0%{top:15%}100%{top:85%}}
-
     .bottom-bar{position:fixed;bottom:0;left:0;right:0;z-index:20;
       background:rgba(15,17,23,.85);backdrop-filter:blur(8px);
       padding:12px 20px;padding-bottom:max(12px,env(safe-area-inset-bottom));text-align:center}
     .hint{font-size:13px;color:var(--text2);line-height:1.5}
     .read-count{font-size:12px;color:var(--green);margin-top:4px;min-height:18px;font-weight:600}
-
+    .cam-info{font-size:10px;color:rgba(255,255,255,.25);margin-top:2px}
     .ok-overlay{position:fixed;inset:0;background:rgba(15,17,23,.95);
       display:none;flex-direction:column;align-items:center;justify-content:center;
       z-index:100;padding:40px 20px;text-align:center}
@@ -65,7 +60,6 @@
     .ok-sp{width:24px;height:24px;border:3px solid var(--border);
       border-top-color:var(--green);border-radius:50%;animation:sp .7s linear infinite}
     @keyframes sp{to{transform:rotate(360deg)}}
-
     .err-full{position:fixed;inset:0;background:var(--bg);z-index:50;
       display:none;flex-direction:column;align-items:center;justify-content:center;
       padding:40px 24px;text-align:center}
@@ -73,7 +67,6 @@
     .err-full .icon{font-size:56px;margin-bottom:20px;opacity:.6}
     .err-full p{font-size:15px;color:var(--text2);line-height:1.7;margin-bottom:20px}
     .err-full a{color:var(--accent);font-size:14px}
-
     #cropCanvas{display:none}
   </style>
 </head>
@@ -86,18 +79,16 @@
         <a class="btn-t" id="btnBack" href="#">돌아가기</a>
       </div>
     </div>
-
     <div class="video-wrap" id="videoWrap">
       <video id="video" autoplay playsinline muted></video>
     </div>
-
     <div class="scan-overlay">
       <div class="scan-guide"><div class="scan-line"></div></div>
     </div>
-
     <div class="bottom-bar">
       <div class="hint">7~10cm 거리에서 바코드를 비춰주세요</div>
       <div class="read-count" id="readCount"></div>
+      <div class="cam-info" id="camInfo"></div>
     </div>
   </div>
 
@@ -129,6 +120,7 @@ var video=document.getElementById('video');
 var cropCanvas=document.getElementById('cropCanvas');
 var cropCtx=cropCanvas.getContext('2d');
 var readCountEl=document.getElementById('readCount');
+var camInfoEl=document.getElementById('camInfo');
 
 var videoTrack=null;
 var torchOn=false;
@@ -138,26 +130,109 @@ var scanTimer=null;
 var lastCode='';
 var matchCount=0;
 
-/* ══ 카메라 시작 ══ */
+/* ══════════════════════════════════════
+   메인 카메라 선택 로직
+   
+   삼성 등 멀티카메라 폰에서 facingMode:'environment'만
+   지정하면 광각(울트라와이드) 렌즈가 선택되는 문제 해결.
+   
+   방법:
+   1) 후면 카메라 목록 수집
+   2) 광각 키워드 제외
+   3) 메인 카메라(보통 camera2 0 또는 첫 번째)를 deviceId로 직접 지정
+   ══════════════════════════════════════ */
+
+async function findMainCamera(){
+  try{
+    /* 임시 스트림으로 권한 획득 (enumerateDevices에 label 필요) */
+    var tempStream=await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'environment'},audio:false
+    });
+    tempStream.getTracks().forEach(function(t){t.stop()});
+
+    var devices=await navigator.mediaDevices.enumerateDevices();
+    var rearCams=devices.filter(function(d){
+      return d.kind==='videoinput'&&d.label&&
+        (/back|rear|환경|후면/i.test(d.label)||/camera.*0/i.test(d.label)||
+         d.label.indexOf('facing back')>=0);
+    });
+
+    if(rearCams.length===0){
+      /* label로 못 찾으면 전체 videoinput 중 후반부 (보통 후면) */
+      var allCams=devices.filter(function(d){return d.kind==='videoinput'});
+      if(allCams.length>1) rearCams=allCams.slice(Math.floor(allCams.length/2));
+      else rearCams=allCams;
+    }
+
+    if(rearCams.length===0) return null;
+
+    /* 광각/와이드 제외 → 메인 카메라 찾기 */
+    var mainCams=rearCams.filter(function(d){
+      var lbl=d.label.toLowerCase();
+      return lbl.indexOf('wide')< 0&&lbl.indexOf('광각')<0&&
+             lbl.indexOf('ultra')<0&&lbl.indexOf('초광각')<0;
+    });
+
+    /* 메인 카메라 후보가 있으면 그 중 첫 번째, 없으면 후면 카메라 중 첫 번째 */
+    var selected=mainCams.length>0?mainCams[0]:rearCams[0];
+    return selected;
+
+  }catch(e){
+    return null;
+  }
+}
 
 async function initCamera(){
   try{
-    /*
-     * 핵심: facingMode만 지정. 그 외 설정(해상도, 초점 등) 일절 건드리지 않음.
-     * 브라우저 기본 자동초점 = 네이티브 카메라 앱과 동일하게 동작.
-     * 해상도/초점모드를 명시적으로 요청하면 카메라가 다른 센서 모드를 선택하여
-     * 자동초점 성능이 달라질 수 있음.
-     */
-    var stream=await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:'environment'},
-      audio:false
-    });
+    var mainCam=await findMainCamera();
+    var constraints;
+
+    if(mainCam&&mainCam.deviceId){
+      /* 메인 카메라를 deviceId로 직접 지정 */
+      constraints={
+        video:{
+          deviceId:{exact:mainCam.deviceId},
+          width:{ideal:1920},
+          height:{ideal:1080}
+        },
+        audio:false
+      };
+      camInfoEl.textContent=mainCam.label||'main camera';
+    }else{
+      /* 폴백: 고해상도 요청으로 메인 카메라 유도 */
+      constraints={
+        video:{
+          facingMode:{exact:'environment'},
+          width:{ideal:1920,min:1280},
+          height:{ideal:1080,min:720}
+        },
+        audio:false
+      };
+    }
+
+    var stream;
+    try{
+      stream=await navigator.mediaDevices.getUserMedia(constraints);
+    }catch(e){
+      /* exact 실패 시 ideal로 재시도 */
+      stream=await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}},
+        audio:false
+      });
+    }
 
     video.srcObject=stream;
     await video.play();
     videoTrack=stream.getVideoTracks()[0];
 
-    /* applyConstraints 호출하지 않음 — 기본 자동초점 그대로 사용 */
+    /* 선택된 카메라 정보 표시 */
+    if(videoTrack){
+      var settings=videoTrack.getSettings();
+      camInfoEl.textContent=(videoTrack.label||'')+' ('+
+        (settings.width||'?')+'x'+(settings.height||'?')+')';
+    }
+
+    /* 카메라 설정은 건드리지 않음 — 기본 자동초점 그대로 사용 */
 
     if('BarcodeDetector' in window){
       detector=new BarcodeDetector({
@@ -212,9 +287,7 @@ async function scanCroppedRegion(){
 function onCodeRead(code){
   if(code===lastCode){matchCount++}
   else{lastCode=code;matchCount=1}
-
   readCountEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
-
   if(matchCount>=CONFIRM_COUNT)onScanConfirmed(code);
 }
 
@@ -225,11 +298,9 @@ function onScanConfirmed(code){
   scanned=true;
   if(scanTimer){clearInterval(scanTimer);scanTimer=null}
   if(navigator.vibrate)navigator.vibrate(150);
-
   document.getElementById('okCode').textContent=code;
   document.getElementById('okOverlay').classList.add('show');
   stopCamera();
-
   if(returnUrl){
     var url=decodeURIComponent(returnUrl);
     var sep=url.indexOf('?')>=0?'&':'?';
