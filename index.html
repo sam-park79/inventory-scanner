@@ -12,83 +12,82 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-    :root{
-      --bg:#0f1117;--surface:#1a1d27;--card:#222633;--border:#2e3345;
+    :root{--bg:#0f1117;--surface:#1a1d27;--card:#222633;--border:#2e3345;
       --text:#e8eaf0;--text2:#9ba1b5;--accent:#4f8cff;--accent2:#3b6fdb;
-      --green:#34d399;--red:#f87171;
-      --radius:14px;--font:'Noto Sans KR',system-ui,-apple-system,sans-serif;
-    }
+      --green:#34d399;--red:#f87171;--orange:#fbbf24;
+      --radius:14px;--font:'Noto Sans KR',system-ui,-apple-system,sans-serif}
     html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);
       font-size:15px;line-height:1.5;overflow-x:hidden;
       padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 
     .app{display:flex;flex-direction:column;height:100dvh;height:100vh;max-width:520px;margin:0 auto}
-    .header{padding:16px 16px 12px;background:var(--bg);position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border)}
-    .header-row{display:flex;justify-content:space-between;align-items:center}
-    .header h1{font-size:20px;font-weight:700;letter-spacing:-.3px}
-    .btn-refresh{background:var(--surface);border:1px solid var(--border);color:var(--text2);
+    .header{padding:14px 16px 10px;background:var(--bg);position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border)}
+    .header-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .header h1{font-size:18px;font-weight:700;letter-spacing:-.3px;flex-shrink:0}
+    .header-btns{display:flex;gap:6px}
+    .hdr-btn{background:var(--surface);border:1px solid var(--border);color:var(--text2);
       height:30px;padding:0 10px;border-radius:8px;font-size:11px;font-family:var(--font);cursor:pointer;
-      display:inline-flex;align-items:center;gap:3px}
-    .btn-refresh:active{background:var(--card)}
-    .header p{font-size:12px;color:var(--text2);margin-top:2px}
-    .data-status{font-size:11px;color:var(--green);margin-top:2px}
-    .data-status.loading-state{color:var(--accent)}
-    .data-status.error-state{color:var(--red)}
+      display:inline-flex;align-items:center;gap:3px;flex-shrink:0}
+    .hdr-btn:active{background:var(--card)}
+    .hdr-btn.move{background:rgba(251,191,36,.15);border-color:rgba(251,191,36,.3);color:var(--orange)}
+    .header p{font-size:11px;color:var(--text2);margin-top:2px}
+    .data-status{font-size:11px;color:var(--green);margin-top:1px}
+    .data-status.ld{color:var(--accent)}.data-status.er{color:var(--red)}
 
-    .search-wrap{padding:12px 16px 8px;position:sticky;top:90px;z-index:9;background:var(--bg)}
+    .search-wrap{padding:10px 16px 8px;position:sticky;top:85px;z-index:9;background:var(--bg)}
     .search-box{display:flex;gap:6px}
-    .search-box input[type="search"]{flex:1;min-width:0;height:46px;padding:0 14px;
+    .search-box input[type="search"]{flex:1;min-width:0;height:44px;padding:0 14px;
       border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);
       color:var(--text);font-size:16px;font-family:var(--font);outline:none}
     .search-box input[type="search"]:focus{border-color:var(--accent)}
     .search-box input[type="search"]::placeholder{color:var(--text2)}
-    .btn{height:46px;padding:0 14px;border:none;border-radius:var(--radius);color:#fff;
+    .btn{height:44px;padding:0 13px;border:none;border-radius:var(--radius);color:#fff;
       font-size:14px;font-weight:600;font-family:var(--font);cursor:pointer;flex-shrink:0;
       display:inline-flex;align-items:center;justify-content:center}
-    .btn-primary{background:var(--accent)}
-    .btn-primary:active{background:var(--accent2)}
-    .btn-scan{background:#7c3aed;padding:0 13px;font-size:18px}
-    .btn-scan:active{background:#6d28d9}
+    .btn-primary{background:var(--accent)}.btn-primary:active{background:var(--accent2)}
+    .btn-scan{background:#7c3aed;padding:0 12px;font-size:17px}.btn-scan:active{background:#6d28d9}
 
-    .status{padding:8px 16px;font-size:13px;color:var(--text2)}
+    .status{padding:6px 16px;font-size:13px;color:var(--text2)}
     .results{flex:1;overflow-y:auto;padding:0 16px 100px;-webkit-overflow-scrolling:touch}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
-    .card-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 10px;border-bottom:1px solid var(--border)}
-    .card-head .code{font-size:13px;font-weight:600;color:var(--accent);background:rgba(79,140,255,.12);padding:3px 10px;border-radius:8px}
-    .card-head .total{font-size:13px;font-weight:600;color:var(--green)}
-    .card-body{padding:12px 16px 14px}
-    .field{display:flex;margin-bottom:6px}
-    .field .label{min-width:56px;font-size:12px;font-weight:600;color:var(--text2)}
-    .field .value{font-size:14px;color:var(--text);word-break:break-all}
-    .loc-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-    .loc-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:10px;
-      font-size:13px;font-weight:500;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2)}
-    .loc-chip .loc-name{color:var(--text)}
-    .loc-chip .loc-qty{color:var(--green);font-weight:700}
-    .no-stock{color:var(--text2);font-size:13px;font-style:italic;margin-top:8px}
-
-    .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center}
-    .empty-icon{font-size:48px;margin-bottom:16px;opacity:.5}
-    .empty-title{font-size:16px;font-weight:600;margin-bottom:6px}
-    .empty-desc{font-size:13px;color:var(--text2)}
-
-    .error-msg{margin:12px 16px;padding:12px 16px;background:rgba(248,113,113,.1);
-      border:1px solid rgba(248,113,113,.25);border-radius:var(--radius);font-size:13px;color:var(--red);display:none}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden}
+    .card-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 8px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:4px}
+    .card-head .code{font-size:12px;font-weight:600;color:var(--accent);background:rgba(79,140,255,.12);padding:2px 8px;border-radius:6px}
+    .card-head .loc-tag{font-size:11px;font-weight:600;color:var(--orange);background:rgba(251,191,36,.12);padding:2px 8px;border-radius:6px}
+    .card-head .total{font-size:12px;font-weight:600;color:var(--green)}
+    .card-body{padding:10px 14px 12px}
+    .field{display:flex;margin-bottom:4px}.field .label{min-width:52px;font-size:11px;font-weight:600;color:var(--text2)}
+    .field .value{font-size:13px;color:var(--text);word-break:break-all}
+    .loc-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+    .loc-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;
+      font-size:12px;font-weight:500;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2)}
+    .loc-chip .loc-name{color:var(--text)}.loc-chip .loc-qty{color:var(--green);font-weight:700}
+    .no-stock{color:var(--text2);font-size:12px;font-style:italic;margin-top:6px}
+    .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:70px 20px;text-align:center}
+    .empty-icon{font-size:44px;margin-bottom:14px;opacity:.5}
+    .empty-title{font-size:15px;font-weight:600;margin-bottom:4px}.empty-desc{font-size:12px;color:var(--text2)}
+    .error-msg{margin:10px 16px;padding:10px 14px;background:rgba(248,113,113,.1);
+      border:1px solid rgba(248,113,113,.25);border-radius:var(--radius);font-size:12px;color:var(--red);display:none}
 
     /* ── 스캐너 오버레이 ── */
     .scanner-overlay{position:fixed;inset:0;z-index:100;background:#000;display:none;flex-direction:column}
     .scanner-overlay.show{display:flex}
-    .sc-top{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;
-      background:rgba(15,17,23,.85);padding-top:max(10px,env(safe-area-inset-top))}
-    .sc-top h2{font-size:15px;font-weight:700;color:#fff}
-    .sc-btns{display:flex;gap:6px}
+    .sc-top{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;
+      background:rgba(15,17,23,.85);padding-top:max(8px,env(safe-area-inset-top));z-index:130}
+    .sc-top h2{font-size:14px;font-weight:700;color:#fff}
+    .sc-btns{display:flex;gap:5px}
     .sc-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;
-      height:34px;padding:0 10px;border-radius:10px;font-size:12px;font-weight:500;
+      height:32px;padding:0 9px;border-radius:9px;font-size:11px;font-weight:500;
       font-family:var(--font);cursor:pointer;display:inline-flex;align-items:center;gap:3px;
       -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);flex-shrink:0}
     .sc-btn:active{background:rgba(255,255,255,.2)}
     .sc-btn.active{background:rgba(251,191,36,.9);color:#000;border-color:transparent}
     .sc-btn.sw{background:rgba(79,140,255,.2);border-color:rgba(79,140,255,.3)}
+
+    /* 스캔 카운터 (이동 모드) */
+    .sc-counter{background:rgba(15,17,23,.85);padding:8px 16px;text-align:center;z-index:125;display:none}
+    .sc-counter.show{display:block}
+    .sc-counter .cnt{font-size:14px;font-weight:700;color:var(--orange)}
+    .sc-counter .last{font-size:11px;color:var(--text2);margin-top:2px}
 
     .sc-camera{flex:1;position:relative;display:flex;align-items:center;justify-content:center;background:#000;overflow:hidden}
     #scanVideo{width:100%;height:100%;-o-object-fit:cover;object-fit:cover}
@@ -98,7 +97,6 @@
     .sc-guide-line{position:absolute;left:8%;right:8%;height:2px;background:var(--green);border-radius:2px;
       opacity:.7;animation:scanAnim 2s ease-in-out infinite alternate}
     @keyframes scanAnim{0%{top:15%}100%{top:85%}}
-
     #iosScanner{flex:1;background:#000;display:none;position:relative;overflow:hidden}
     #iosScanner video,#iosScanner canvas{width:100%!important;height:100%!important;
       -o-object-fit:cover;object-fit:cover;position:absolute;top:0;left:0}
@@ -106,10 +104,60 @@
 
     .sc-bottom{position:fixed;bottom:0;left:0;right:0;z-index:120;background:rgba(15,17,23,.85);
       -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
-      padding:10px 16px;padding-bottom:max(10px,env(safe-area-inset-bottom));text-align:center}
-    .sc-hint{font-size:13px;color:var(--text2)}
-    .sc-read{font-size:12px;color:var(--green);margin-top:3px;min-height:17px;font-weight:600}
-    .sc-cam-info{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px}
+      padding:8px 16px;padding-bottom:max(8px,env(safe-area-inset-bottom));text-align:center}
+    .sc-hint{font-size:12px;color:var(--text2)}
+    .sc-read{font-size:11px;color:var(--green);margin-top:2px;min-height:15px;font-weight:600}
+    .sc-cam-info{font-size:9px;color:rgba(255,255,255,.3);margin-top:1px}
+    .btn-scan-done{margin-top:8px;width:100%;height:42px;border:none;border-radius:12px;
+      background:var(--orange);color:#000;font-size:15px;font-weight:700;font-family:var(--font);cursor:pointer;display:none}
+    .btn-scan-done.show{display:block}
+
+    /* ── 리뷰 오버레이 (상품 이동 확인) ── */
+    .review-overlay{position:fixed;inset:0;z-index:200;background:var(--bg);display:none;flex-direction:column}
+    .review-overlay.show{display:flex}
+    .rv-top{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;
+      padding-top:max(14px,env(safe-area-inset-top))}
+    .rv-top h2{font-size:17px;font-weight:700}.rv-close{background:var(--surface);border:1px solid var(--border);
+      color:var(--text);height:34px;padding:0 14px;border-radius:10px;font-size:13px;font-family:var(--font);cursor:pointer}
+    .rv-body{flex:1;overflow-y:auto;padding:12px 16px;-webkit-overflow-scrolling:touch}
+    .rv-table{width:100%;border-collapse:collapse}
+    .rv-table th{font-size:11px;font-weight:600;color:var(--text2);text-align:left;padding:8px 6px;
+      border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg)}
+    .rv-table td{font-size:13px;padding:10px 6px;border-bottom:1px solid var(--border)}
+    .rv-table input[type="checkbox"]{width:18px;height:18px;accent-color:var(--green)}
+    .rv-table .code-cell{font-family:monospace;font-size:12px;word-break:break-all}
+    .rv-bottom{padding:12px 16px;border-top:1px solid var(--border);
+      padding-bottom:max(12px,env(safe-area-inset-bottom))}
+    .btn-move{width:100%;height:46px;border:none;border-radius:14px;background:var(--orange);
+      color:#000;font-size:16px;font-weight:700;font-family:var(--font);cursor:pointer}
+    .btn-move:active{background:#e5a800}
+    .btn-move:disabled{opacity:.4}
+
+    /* ── 로케이션 입력 모달 ── */
+    .modal-bg{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.7);display:none;
+      align-items:center;justify-content:center;padding:20px}
+    .modal-bg.show{display:flex}
+    .modal-box{background:var(--card);border:1px solid var(--border);border-radius:18px;
+      padding:24px 20px;width:100%;max-width:360px;text-align:center}
+    .modal-box h3{font-size:17px;font-weight:700;margin-bottom:12px}
+    .modal-box p{font-size:13px;color:var(--text2);margin-bottom:16px}
+    .modal-box input[type="text"]{width:100%;height:48px;padding:0 16px;border:1.5px solid var(--border);
+      border-radius:12px;background:var(--surface);color:var(--text);font-size:18px;font-weight:600;
+      font-family:var(--font);text-align:center;outline:none}
+    .modal-box input[type="text"]:focus{border-color:var(--accent)}
+    .modal-btns{display:flex;gap:8px;margin-top:16px}
+    .modal-btns button{flex:1;height:44px;border:none;border-radius:12px;font-size:15px;
+      font-weight:600;font-family:var(--font);cursor:pointer}
+    .modal-cancel{background:var(--surface);color:var(--text)}
+    .modal-ok{background:var(--orange);color:#000}
+
+    /* 처리중 */
+    .processing-overlay{position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.8);
+      display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+    .processing-overlay.show{display:flex}
+    .proc-spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--orange);
+      border-radius:50%;animation:sp .7s linear infinite}
+    .proc-text{font-size:15px;color:var(--text)}
 
     @keyframes sp{to{transform:rotate(360deg)}}
     #cropCanvas{display:none}
@@ -117,43 +165,48 @@
 </head>
 <body>
 
+<!-- ══ 메인 ══ -->
 <div class="app">
   <div class="header">
     <div class="header-row">
-      <h1>📦 재고 위치 조회</h1>
-      <button class="btn-refresh" onclick="loadData()">🔄 새로고침</button>
+      <h1>📦 재고 조회</h1>
+      <div class="header-btns">
+        <button class="hdr-btn move" onclick="startMoveMode()">📦 상품 이동</button>
+        <button class="hdr-btn" onclick="loadData()">🔄 새로고침</button>
+      </div>
     </div>
-    <p>품목코드 또는 품목명 입력 · 바코드 스캔</p>
+    <p>품목코드 / 품목명 검색 · 바코드 스캔</p>
     <div class="data-status" id="dataStatus">데이터 로딩 중...</div>
   </div>
   <div class="search-wrap">
     <div class="search-box">
       <input id="q" type="search" placeholder="품목코드 / 품목명" enterkeyhint="search"
              autocomplete="off" autocorrect="off" autocapitalize="off">
-      <button class="btn btn-scan" onclick="openScanner()">📷</button>
+      <button class="btn btn-scan" onclick="openScanner('search')">📷</button>
       <button class="btn btn-primary" onclick="doSearch()">검색</button>
     </div>
   </div>
   <div class="error-msg" id="error"></div>
   <div class="status" id="status"></div>
   <div class="results" id="results">
-    <div class="empty">
-      <div class="empty-icon">🔍</div>
-      <div class="empty-title">검색어를 입력하세요</div>
-      <div class="empty-desc">품목코드 일부 또는 품목명으로 검색<br>📷 바코드 스캔도 가능합니다</div>
-    </div>
+    <div class="empty"><div class="empty-icon">🔍</div><div class="empty-title">검색어를 입력하세요</div>
+      <div class="empty-desc">품목코드 일부 또는 품목명으로 검색<br>📷 바코드 스캔도 가능합니다</div></div>
   </div>
 </div>
 
-<!-- 스캐너 오버레이 -->
+<!-- ══ 스캐너 오버레이 ══ -->
 <div class="scanner-overlay" id="scannerOverlay">
   <div class="sc-top">
-    <h2>📷 바코드 스캔</h2>
+    <h2 id="scTitle">📷 바코드 스캔</h2>
     <div class="sc-btns">
       <button class="sc-btn sw" id="btnSwitch" onclick="switchCamera()">🔄 전환</button>
       <button class="sc-btn" id="btnTorch" onclick="toggleTorch()">🔦</button>
       <button class="sc-btn" onclick="closeScanner()">닫기</button>
     </div>
+  </div>
+  <div class="sc-counter" id="scCounter">
+    <div class="cnt" id="scCnt">스캔: 0건</div>
+    <div class="last" id="scLast"></div>
   </div>
   <div class="sc-camera" id="androidCam"><video id="scanVideo" autoplay playsinline muted></video></div>
   <div class="sc-guide-wrap" id="scanGuide"><div class="sc-guide"><div class="sc-guide-line"></div></div></div>
@@ -162,15 +215,44 @@
     <div class="sc-hint">바코드를 카메라에 비춰주세요</div>
     <div class="sc-read" id="scRead"></div>
     <div class="sc-cam-info" id="scCamInfo"></div>
+    <button class="btn-scan-done" id="btnScanDone" onclick="showReview()">📋 스캔 완료</button>
   </div>
+</div>
+
+<!-- ══ 리뷰 오버레이 ══ -->
+<div class="review-overlay" id="reviewOverlay">
+  <div class="rv-top">
+    <h2>📋 스캔 목록 확인</h2>
+    <button class="rv-close" onclick="closeReview()">← 뒤로</button>
+  </div>
+  <div class="rv-body" id="rvBody"></div>
+  <div class="rv-bottom">
+    <button class="btn-move" id="btnMove" onclick="promptLocation()">📦 상품 이동 진행</button>
+  </div>
+</div>
+
+<!-- ══ 위치 입력 모달 ══ -->
+<div class="modal-bg" id="locModal">
+  <div class="modal-box">
+    <h3>📍 이동 위치 입력</h3>
+    <p>상품을 이동할 창고 위치를 입력하세요</p>
+    <input type="text" id="locInput" placeholder="예: A3" autocomplete="off" autocapitalize="characters">
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeLocModal()">취소</button>
+      <button class="modal-ok" onclick="executeMove()">이동 실행</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 처리중 ══ -->
+<div class="processing-overlay" id="procOverlay">
+  <div class="proc-spinner"></div>
+  <div class="proc-text" id="procText">상품 위치 업데이트 중...</div>
 </div>
 
 <canvas id="cropCanvas"></canvas>
 
 <script>
-/* ══════════════════════════════════════
-   설정
-   ══════════════════════════════════════ */
 var API_URL='https://script.google.com/macros/s/AKfycbzrVSkWebWfBtld-HDNrLM66ndMfDvbVwLm5ROTLOJk5oBL9P9HfLlnsHentsXexSMG/exec';
 
 var qEl=document.getElementById('q');
@@ -186,114 +268,70 @@ var CONFIRM_COUNT=3;
 var MAX_RESULTS=50;
 
 /* ══════════════════════════════════════
-   데이터 프리로드 + 로컬 검색
+   데이터 프리로드
    ══════════════════════════════════════ */
-
-var inventory=null;  /* 전체 데이터 (메모리) */
+var inventory=null;
 var dataLoading=false;
 
-/** 페이지 로드 시 전체 데이터 다운로드 */
 function loadData(){
-  if(dataLoading)return;
-  dataLoading=true;
-  dataStatusEl.textContent='데이터 로딩 중...';
-  dataStatusEl.className='data-status loading-state';
-
-  fetch(API_URL+'?action=load')
-  .then(function(r){return r.json()})
-  .then(function(res){
+  if(dataLoading)return;dataLoading=true;
+  dataStatusEl.textContent='데이터 로딩 중...';dataStatusEl.className='data-status ld';
+  fetch(API_URL+'?action=load').then(function(r){return r.json()}).then(function(res){
     dataLoading=false;
-    if(!res.success){
-      dataStatusEl.textContent='로드 실패: '+res.error;
-      dataStatusEl.className='data-status error-state';
-      return;
-    }
+    if(!res.success){dataStatusEl.textContent='로드 실패: '+res.error;dataStatusEl.className='data-status er';return}
     inventory=res.data;
-    var now=new Date();
-    var timeStr=now.getHours()+':'+String(now.getMinutes()).replace(/^(\d)$/,'0$1');
-    dataStatusEl.textContent='✓ '+res.count+'건 로드 완료 ('+timeStr+')';
+    var t=new Date();dataStatusEl.textContent='✓ '+res.count+'건 ('+t.getHours()+':'+String(t.getMinutes()).replace(/^(\d)$/,'0$1')+')';
     dataStatusEl.className='data-status';
-  })
-  .catch(function(err){
-    dataLoading=false;
-    dataStatusEl.textContent='서버 연결 실패';
-    dataStatusEl.className='data-status error-state';
-  });
+  }).catch(function(){dataLoading=false;dataStatusEl.textContent='서버 연결 실패';dataStatusEl.className='data-status er'});
 }
-
-/* 페이지 로드 시 자동 실행 */
 loadData();
 
 qEl.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();doSearch()}});
 
-/** 로컬 검색 (메모리에서 즉시) */
+/* ══════════════════════════════════════
+   검색 (로컬)
+   ══════════════════════════════════════ */
 function doSearch(){
   var q=qEl.value.trim();if(!q){qEl.focus();return}
   errorEl.style.display='none';statusEl.textContent='';
+  if(!inventory){showError('데이터 로딩 중입니다.');return}
 
-  if(!inventory){
-    showError('데이터 로딩 중입니다. 잠시 후 다시 시도해 주세요.');
-    return;
-  }
-
-  var qLower=q.toLowerCase();
-  var isBarcode=/^[A-Za-z0-9]{10,}$/.test(q);
-  var results=[];
-
+  var qL=q.toLowerCase(),isB=/^[A-Za-z0-9]{10,}$/.test(q),res=[];
   for(var r=0;r<inventory.length;r++){
-    var rec=inventory[r];
-    var codeLower=rec.c.toLowerCase(),nameLower=rec.m.toLowerCase();
-
-    if(isBarcode){if(codeLower!==qLower)continue}
-    else{if(codeLower.indexOf(qLower)<0&&nameLower.indexOf(qLower)<0)continue}
-
-    var totalQty=0,locs=[];
-    for(var j=0;j<rec.l.length;j++){totalQty+=rec.l[j].q;locs.push({name:rec.l[j].n,qty:rec.l[j].q})}
-
-    results.push({itemCode:rec.c,brand:rec.b,itemName:rec.m,itemDesc:rec.d,
-      color:rec.r,size:rec.s,locations:locs,totalQty:totalQty});
-    if(results.length>=MAX_RESULTS)break;
+    var rec=inventory[r],cL=rec.c.toLowerCase(),nL=rec.m.toLowerCase();
+    if(isB){if(cL!==qL)continue}else{if(cL.indexOf(qL)<0&&nL.indexOf(qL)<0)continue}
+    var tq=0,lo=[];for(var j=0;j<rec.l.length;j++){tq+=rec.l[j].q;lo.push({name:rec.l[j].n,qty:rec.l[j].q})}
+    res.push({itemCode:rec.c,brand:rec.b,itemName:rec.m,itemDesc:rec.d,
+      color:rec.r,size:rec.s,itemLocation:rec.p||'',locations:lo,totalQty:tq});
+    if(res.length>=MAX_RESULTS)break;
   }
-
-  /* 바코드 정확 일치 실패 시 부분 일치 재검색 */
-  if(isBarcode&&results.length===0){
+  if(isB&&res.length===0){
     for(var r2=0;r2<inventory.length;r2++){
-      var rec2=inventory[r2];
-      if(rec2.c.toLowerCase().indexOf(qLower)<0&&rec2.m.toLowerCase().indexOf(qLower)<0)continue;
-      var tq2=0,lo2=[];
-      for(var j2=0;j2<rec2.l.length;j2++){tq2+=rec2.l[j2].q;lo2.push({name:rec2.l[j2].n,qty:rec2.l[j2].q})}
-      results.push({itemCode:rec2.c,brand:rec2.b,itemName:rec2.m,itemDesc:rec2.d,
-        color:rec2.r,size:rec2.s,locations:lo2,totalQty:tq2});
-      if(results.length>=MAX_RESULTS)break;
+      var rc=inventory[r2];if(rc.c.toLowerCase().indexOf(qL)<0&&rc.m.toLowerCase().indexOf(qL)<0)continue;
+      var t2=0,l2=[];for(var j2=0;j2<rc.l.length;j2++){t2+=rc.l[j2].q;l2.push({name:rc.l[j2].n,qty:rc.l[j2].q})}
+      res.push({itemCode:rc.c,brand:rc.b,itemName:rc.m,itemDesc:rc.d,
+        color:rc.r,size:rc.s,itemLocation:rc.p||'',locations:l2,totalQty:t2});
+      if(res.length>=MAX_RESULTS)break;
     }
   }
-
-  renderResults(results);
+  renderResults(res);
 }
 
 function renderResults(data){
-  if(!data.length){
-    statusEl.textContent='검색 결과가 없습니다.';
-    resultsEl.innerHTML='<div class="empty"><div class="empty-icon">📭</div>'+
-      '<div class="empty-title">일치하는 품목이 없습니다</div><div class="empty-desc">다른 검색어를 시도해 보세요</div></div>';
-    return;
-  }
+  if(!data.length){statusEl.textContent='검색 결과가 없습니다.';
+    resultsEl.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-title">일치하는 품목이 없습니다</div></div>';return}
   statusEl.textContent=data.length+'건 검색됨';
   var h='';
   for(var i=0;i<data.length;i++){
     var d=data[i];
-    h+='<div class="card"><div class="card-head"><span class="code">'+esc(d.itemCode)+
-      '</span><span class="total">총 '+d.totalQty+'개</span></div><div class="card-body">'+
-      field('브랜드',d.brand)+field('품목명',d.itemName)+
-      (d.itemDesc?field('품목설명',d.itemDesc):'')+field('컬러',d.color)+field('사이즈',d.size);
-    if(d.locations.length){
-      h+='<div class="loc-row">';
-      for(var j=0;j<d.locations.length;j++){
-        h+='<div class="loc-chip"><span class="loc-name">'+esc(d.locations[j].name)+
-          '</span><span class="loc-qty">'+d.locations[j].qty+'</span></div>';
-      }
-      h+='</div>';
-    }else h+='<div class="no-stock">재고 없음</div>';
+    h+='<div class="card"><div class="card-head"><span class="code">'+esc(d.itemCode)+'</span>';
+    if(d.itemLocation)h+='<span class="loc-tag">📍 '+esc(d.itemLocation)+'</span>';
+    h+='<span class="total">총 '+d.totalQty+'개</span></div><div class="card-body">'+
+      field('브랜드',d.brand)+field('품목명',d.itemName)+(d.itemDesc?field('품목설명',d.itemDesc):'')+
+      field('컬러',d.color)+field('사이즈',d.size);
+    if(d.locations.length){h+='<div class="loc-row">';
+      for(var j=0;j<d.locations.length;j++)h+='<div class="loc-chip"><span class="loc-name">'+esc(d.locations[j].name)+'</span><span class="loc-qty">'+d.locations[j].qty+'</span></div>';
+      h+='</div>'}else h+='<div class="no-stock">재고 없음</div>';
     h+='</div></div>';
   }
   resultsEl.innerHTML=h;
@@ -306,16 +344,14 @@ function esc(s){var d=document.createElement('span');d.textContent=s;return d.in
 /* ══════════════════════════════════════
    피드백
    ══════════════════════════════════════ */
-var audioCtx;
-try{audioCtx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}
+var audioCtx;try{audioCtx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}
 function unlockAudio(){if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(function(){})}
 document.addEventListener('touchstart',unlockAudio,{passive:true});
 document.addEventListener('click',unlockAudio,{passive:true});
 
 function playBeep(){
   if(!audioCtx)return;unlockAudio();
-  setTimeout(function(){try{
-    var t=audioCtx.currentTime;
+  setTimeout(function(){try{var t=audioCtx.currentTime;
     var o1=audioCtx.createOscillator(),g1=audioCtx.createGain();
     o1.type='square';o1.frequency.value=1200;g1.gain.value=1.0;
     o1.connect(g1);g1.connect(audioCtx.destination);o1.start(t);o1.stop(t+0.15);
@@ -326,9 +362,7 @@ function playBeep(){
 }
 
 function confirmFeedback(){
-  if(window.navigator&&typeof window.navigator.vibrate==='function'){
-    try{window.navigator.vibrate(400)}catch(e){}
-  }
+  if(window.navigator&&typeof window.navigator.vibrate==='function'){try{window.navigator.vibrate(400)}catch(e){}}
   playBeep();
 }
 
@@ -338,28 +372,44 @@ function confirmFeedback(){
 var allCameras=[],currentCamIndex=0;
 var scanVideo,cropCanvas,cropCtx,nativeDetector,scanTimer;
 var scanned=false,lastCode='',matchCount=0,torchOn=false,activeTrack=null;
+var scanMode='search'; /* 'search' | 'move' */
+var moveScannedItems={}; /* {code: qty} */
+var moveScannedTotal=0;
 
-function openScanner(){
+function openScanner(mode){
+  scanMode=mode||'search';
   scanned=false;lastCode='';matchCount=0;torchOn=false;
   scReadEl.textContent='';scCamInfoEl.textContent='';
   document.getElementById('btnTorch').classList.remove('active');
   document.getElementById('scannerOverlay').classList.add('show');
+
+  if(scanMode==='move'){
+    document.getElementById('scTitle').textContent='📦 상품 이동 스캔';
+    document.getElementById('scCounter').classList.add('show');
+    document.getElementById('btnScanDone').classList.add('show');
+    document.getElementById('scCnt').textContent='스캔: 0건';
+    document.getElementById('scLast').textContent='';
+    moveScannedItems={};moveScannedTotal=0;
+  }else{
+    document.getElementById('scTitle').textContent='📷 바코드 스캔';
+    document.getElementById('scCounter').classList.remove('show');
+    document.getElementById('btnScanDone').classList.remove('show');
+  }
+
   if(useNative)initAndroidScanner();else initIOSScanner();
 }
 
 function closeScanner(){
   document.getElementById('scannerOverlay').classList.remove('show');
-  if(useNative)stopAndroid();
-  else{try{Quagga.stop()}catch(e){}}
+  if(useNative)stopAndroid();else{try{Quagga.stop()}catch(e){}}
 }
+
+function startMoveMode(){openScanner('move')}
 
 function discoverCameras(){
   return navigator.mediaDevices.enumerateDevices().then(function(devs){
-    allCameras=devs.filter(function(d){
-      if(d.kind!=='videoinput')return false;
-      var l=(d.label||'').toLowerCase();
-      return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0;
-    });
+    allCameras=devs.filter(function(d){if(d.kind!=='videoinput')return false;
+      var l=(d.label||'').toLowerCase();return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0});
     if(!allCameras.length)allCameras=devs.filter(function(d){return d.kind==='videoinput'});
     var s='';try{s=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
     if(s){for(var i=0;i<allCameras.length;i++){if(allCameras[i].deviceId===s){currentCamIndex=i;break}}}
@@ -368,140 +418,184 @@ function discoverCameras(){
 }
 
 function switchCamera(){
-  if(allCameras.length<=1){scCamInfoEl.textContent='전환 가능한 카메라가 없습니다';return}
+  if(allCameras.length<=1){scCamInfoEl.textContent='전환 불가';return}
   currentCamIndex=(currentCamIndex+1)%allCameras.length;
   lastCode='';matchCount=0;scReadEl.textContent='';torchOn=false;
   document.getElementById('btnTorch').classList.remove('active');
-  scCamInfoEl.textContent='전환 중...';
   if(useNative)startAndroidCam(currentCamIndex);else restartQuagga(currentCamIndex);
 }
 
 function toggleTorch(){
-  if(!activeTrack){try{var v=document.querySelector('#iosScanner video');
-    if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}}
+  if(!activeTrack){try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}}
   if(!activeTrack)return;
-  try{var caps=activeTrack.getCapabilities?activeTrack.getCapabilities():{};
-    if(!caps.torch)return;torchOn=!torchOn;
+  try{var caps=activeTrack.getCapabilities?activeTrack.getCapabilities():{};if(!caps.torch)return;torchOn=!torchOn;
     activeTrack.applyConstraints({advanced:[{torch:torchOn}]}).then(function(){
       document.getElementById('btnTorch').classList.toggle('active',torchOn)}).catch(function(){torchOn=false})}catch(e){}
 }
 
 function onCodeRead(code){
-  if(scanned)return;
+  if(scanned&&scanMode==='search')return;
   if(code===lastCode)matchCount++;else{lastCode=code;matchCount=1}
   scReadEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
   if(matchCount>=CONFIRM_COUNT)onScanConfirmed(code);
 }
 
 function onScanConfirmed(code){
+  if(scanMode==='move'){
+    /* 이동 모드: 아이템 추가 후 계속 스캔 */
+    confirmFeedback();
+    moveScannedItems[code]=(moveScannedItems[code]||0)+1;
+    moveScannedTotal++;
+    document.getElementById('scCnt').textContent='스캔: '+moveScannedTotal+'건 ('+Object.keys(moveScannedItems).length+'종)';
+    document.getElementById('scLast').textContent='마지막: '+code;
+    /* 스캔 리셋 — 계속 스캔 가능 */
+    scanned=false;lastCode='';matchCount=0;scReadEl.textContent='';
+    return;
+  }
+
+  /* 검색 모드: 기존 동작 */
   if(scanned)return;scanned=true;
-  confirmFeedback();
-  closeScanner();
-  qEl.value=code;
-  doSearch();
+  confirmFeedback();closeScanner();
+  qEl.value=code;doSearch();
 }
 
-/* ── Android: BarcodeDetector ── */
+/* ── Android ── */
 function initAndroidScanner(){
   document.getElementById('iosScanner').style.display='none';
   document.getElementById('androidCam').style.display='flex';
   document.getElementById('scanGuide').style.display='flex';
-  scanVideo=document.getElementById('scanVideo');
-  cropCanvas=document.getElementById('cropCanvas');
-  cropCtx=cropCanvas.getContext('2d');
-  if(!nativeDetector)nativeDetector=new BarcodeDetector({
-    formats:['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','code_93','codabar','qr_code']});
-
+  scanVideo=document.getElementById('scanVideo');cropCanvas=document.getElementById('cropCanvas');cropCtx=cropCanvas.getContext('2d');
+  if(!nativeDetector)nativeDetector=new BarcodeDetector({formats:['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','code_93','codabar','qr_code']});
   var savedId='';try{savedId=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
-  var constraints=savedId
-    ?{video:{deviceId:{exact:savedId}},audio:false}
-    :{video:{facingMode:'environment'},audio:false};
-
-  navigator.mediaDevices.getUserMedia(constraints)
+  var c=savedId?{video:{deviceId:{exact:savedId}},audio:false}:{video:{facingMode:'environment'},audio:false};
+  navigator.mediaDevices.getUserMedia(c)
   .catch(function(){return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})})
-  .then(function(stream){
-    scanVideo.srcObject=stream;activeTrack=stream.getVideoTracks()[0];
+  .then(function(stream){scanVideo.srcObject=stream;activeTrack=stream.getVideoTracks()[0];
     var s=activeTrack.getSettings?activeTrack.getSettings():{};
     scCamInfoEl.textContent=(activeTrack.label||'카메라')+' ('+(s.width||'?')+'x'+(s.height||'?')+')';
-    return scanVideo.play();
-  }).then(function(){startAndroidScan();return discoverCameras()})
-  .catch(function(){scCamInfoEl.textContent='카메라 권한을 확인해 주세요'});
+    return scanVideo.play()}).then(function(){startAndroidScan();return discoverCameras()})
+  .catch(function(){scCamInfoEl.textContent='카메라 권한 확인'});
 }
-
-function startAndroidCam(idx){
-  stopAndroid();var cam=allCameras[idx];if(!cam)return;
+function startAndroidCam(idx){stopAndroid();var cam=allCameras[idx];if(!cam)return;
   navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:cam.deviceId}},audio:false})
   .catch(function(){return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})})
-  .then(function(stream){
-    scanVideo.srcObject=stream;activeTrack=stream.getVideoTracks()[0];
+  .then(function(stream){scanVideo.srcObject=stream;activeTrack=stream.getVideoTracks()[0];
     var s=activeTrack.getSettings?activeTrack.getSettings():{};
     scCamInfoEl.textContent=(activeTrack.label||'카메라 '+(idx+1))+' ('+(s.width||'?')+'x'+(s.height||'?')+')';
     try{localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}
-    return scanVideo.play();
-  }).then(function(){startAndroidScan()});
+    return scanVideo.play()}).then(function(){startAndroidScan()});
 }
-
-function startAndroidScan(){
-  if(scanTimer)clearInterval(scanTimer);
-  scanTimer=setInterval(function(){
-    if(scanned||scanVideo.readyState<2)return;
+function startAndroidScan(){if(scanTimer)clearInterval(scanTimer);
+  scanTimer=setInterval(function(){if((scanned&&scanMode==='search')||scanVideo.readyState<2)return;
     var vw=scanVideo.videoWidth,vh=scanVideo.videoHeight;if(!vw||!vh)return;
     var gw=vw*.9,gh=gw/1.8,gx=(vw-gw)/2,gy=(vh-gh)/2;
-    cropCanvas.width=gw;cropCanvas.height=gh;
-    cropCtx.drawImage(scanVideo,gx,gy,gw,gh,0,0,gw,gh);
-    nativeDetector.detect(cropCanvas).then(function(r){
-      if(r.length>0)onCodeRead(r[0].rawValue);
-      else if(matchCount>0){matchCount=0;lastCode='';scReadEl.textContent=''}
-    }).catch(function(){});
+    cropCanvas.width=gw;cropCanvas.height=gh;cropCtx.drawImage(scanVideo,gx,gy,gw,gh,0,0,gw,gh);
+    nativeDetector.detect(cropCanvas).then(function(r){if(r.length>0)onCodeRead(r[0].rawValue);
+      else if(matchCount>0){matchCount=0;lastCode='';scReadEl.textContent=''}}).catch(function(){});
   },100);
 }
-
-function stopAndroid(){
-  if(scanTimer){clearInterval(scanTimer);scanTimer=null}
-  if(scanVideo&&scanVideo.srcObject){scanVideo.srcObject.getTracks().forEach(function(t){t.stop()});scanVideo.srcObject=null}
-  activeTrack=null;
-}
+function stopAndroid(){if(scanTimer){clearInterval(scanTimer);scanTimer=null}
+  if(scanVideo&&scanVideo.srcObject){scanVideo.srcObject.getTracks().forEach(function(t){t.stop()});scanVideo.srcObject=null}activeTrack=null}
 
 /* ── iOS: QuaggaJS ── */
 function initIOSScanner(){
-  document.getElementById('androidCam').style.display='none';
-  document.getElementById('iosScanner').style.display='block';
-  Quagga.init({
-    inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
-      constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
-    decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader',
-      'upc_reader','upc_e_reader','i2of5_reader','codabar_reader']},
+  document.getElementById('androidCam').style.display='none';document.getElementById('iosScanner').style.display='block';
+  Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
+    constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
+    decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','i2of5_reader','codabar_reader']},
     locate:true,frequency:10
-  },function(err){
-    if(err){scCamInfoEl.textContent='카메라 시작 실패';return}
+  },function(err){if(err){scCamInfoEl.textContent='카메라 실패';return}
     Quagga.start();scCamInfoEl.textContent='iOS — QuaggaJS';
-    try{var v=document.querySelector('#iosScanner video');
-      if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
-    discoverCameras();
-  });
-  Quagga.onDetected(function(result){
-    if(scanned)return;var code=result.codeResult.code;if(code)onCodeRead(code);
-  });
+    try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+    discoverCameras()});
+  Quagga.onDetected(function(result){if(result.codeResult.code)onCodeRead(result.codeResult.code)});
+}
+function restartQuagga(idx){try{Quagga.stop()}catch(e){}var cam=allCameras[idx];
+  var cs=cam?{deviceId:{exact:cam.deviceId}}:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
+  setTimeout(function(){Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),constraints:cs},
+    decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','i2of5_reader','codabar_reader']},
+    locate:true,frequency:10},function(err){if(err)return;Quagga.start();activeTrack=null;
+    try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
+      scCamInfoEl.textContent=activeTrack.label||'카메라 '+(idx+1)}}catch(e){}
+    try{if(cam)localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}});},300);
 }
 
-function restartQuagga(idx){
-  try{Quagga.stop()}catch(e){}
-  var cam=allCameras[idx];
-  var constraints=cam?{deviceId:{exact:cam.deviceId}}:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
-  setTimeout(function(){
-    Quagga.init({
-      inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),constraints:constraints},
-      decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader',
-        'upc_reader','upc_e_reader','i2of5_reader','codabar_reader']},locate:true,frequency:10
-    },function(err){
-      if(err){scCamInfoEl.textContent='전환 실패';return}
-      Quagga.start();activeTrack=null;
-      try{var v=document.querySelector('#iosScanner video');
-        if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
-          scCamInfoEl.textContent=activeTrack.label||'카메라 '+(idx+1)}}catch(e){}
-      try{if(cam)localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}
-    });
-  },300);
+/* ══════════════════════════════════════
+   리뷰 (상품 이동 확인)
+   ══════════════════════════════════════ */
+
+function showReview(){
+  closeScanner();
+  var keys=Object.keys(moveScannedItems);
+  if(keys.length===0){alert('스캔된 상품이 없습니다.');return}
+
+  var h='<table class="rv-table"><thead><tr><th style="width:30px"><input type="checkbox" checked onchange="toggleAllCb(this)"></th><th>품목코드</th><th style="width:50px;text-align:center">수량</th></tr></thead><tbody>';
+  for(var i=0;i<keys.length;i++){
+    h+='<tr><td><input type="checkbox" class="rv-cb" checked data-code="'+esc(keys[i])+'"></td>'+
+      '<td class="code-cell">'+esc(keys[i])+'</td><td style="text-align:center">'+moveScannedItems[keys[i]]+'</td></tr>';
+  }
+  h+='</tbody></table>';
+  document.getElementById('rvBody').innerHTML=h;
+  document.getElementById('reviewOverlay').classList.add('show');
+}
+
+function closeReview(){document.getElementById('reviewOverlay').classList.remove('show')}
+
+function toggleAllCb(master){
+  var cbs=document.querySelectorAll('.rv-cb');
+  for(var i=0;i<cbs.length;i++)cbs[i].checked=master.checked;
+}
+
+/* ══════════════════════════════════════
+   위치 입력 + API 호출
+   ══════════════════════════════════════ */
+
+function promptLocation(){
+  var cbs=document.querySelectorAll('.rv-cb:checked');
+  if(cbs.length===0){alert('이동할 상품을 선택해 주세요.');return}
+  document.getElementById('locInput').value='';
+  document.getElementById('locModal').classList.add('show');
+  setTimeout(function(){document.getElementById('locInput').focus()},200);
+}
+
+function closeLocModal(){document.getElementById('locModal').classList.remove('show')}
+
+function executeMove(){
+  var location=document.getElementById('locInput').value.trim();
+  if(!location){alert('위치를 입력해 주세요.');return}
+
+  var cbs=document.querySelectorAll('.rv-cb:checked');
+  var items=[];
+  for(var i=0;i<cbs.length;i++){items.push({code:cbs[i].getAttribute('data-code')})}
+
+  closeLocModal();
+  document.getElementById('procOverlay').classList.add('show');
+  document.getElementById('procText').textContent=items.length+'종 상품 → '+location+' 이동 처리 중...';
+
+  fetch(API_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({action:'move',items:items,location:location})
+  })
+  .then(function(r){return r.json()})
+  .then(function(res){
+    document.getElementById('procOverlay').classList.remove('show');
+    if(!res.success){alert('오류: '+(res.error||'알 수 없는 오류'));return}
+
+    alert('✅ 상품 이동 완료\n\n'+
+      '• 위치: '+res.location+'\n'+
+      '• 처리: '+res.updated+'건 업데이트\n'+
+      '• 상품: '+res.itemCount+'종');
+
+    document.getElementById('reviewOverlay').classList.remove('show');
+
+    /* 데이터 새로고침 */
+    loadData();
+  })
+  .catch(function(err){
+    document.getElementById('procOverlay').classList.remove('show');
+    alert('서버 연결 실패: '+err.message);
+  });
 }
 </script>
 </body>
