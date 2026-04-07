@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>재고 조회</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    :root{
+      --bg:#0f1117;--surface:#1a1d27;--card:#222633;--border:#2e3345;
+      --text:#e8eaf0;--text2:#9ba1b5;--accent:#4f8cff;--accent2:#3b6fdb;
+      --green:#34d399;--red:#f87171;
+      --radius:14px;--font:'Noto Sans KR',system-ui,-apple-system,sans-serif;
+    }
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);
+      font-size:15px;line-height:1.5;overflow-x:hidden;
+      padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+    /* ── 메인 레이아웃 ── */
+    .app{display:flex;flex-direction:column;height:100dvh;height:100vh;max-width:520px;margin:0 auto}
+    .header{padding:16px 16px 12px;background:var(--bg);position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border)}
+    .header h1{font-size:20px;font-weight:700;letter-spacing:-.3px}
+    .header p{font-size:12px;color:var(--text2);margin-top:2px}
+
+    .search-wrap{padding:12px 16px 8px;position:sticky;top:72px;z-index:9;background:var(--bg)}
+    .search-box{display:flex;gap:6px}
+    .search-box input[type="search"]{flex:1;min-width:0;height:46px;padding:0 14px;
+      border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);
+      color:var(--text);font-size:16px;font-family:var(--font);outline:none}
+    .search-box input[type="search"]:focus{border-color:var(--accent)}
+    .search-box input[type="search"]::placeholder{color:var(--text2)}
+    .btn{height:46px;padding:0 14px;border:none;border-radius:var(--radius);color:#fff;
+      font-size:14px;font-weight:600;font-family:var(--font);cursor:pointer;flex-shrink:0;
+      display:inline-flex;align-items:center;justify-content:center}
+    .btn-primary{background:var(--accent)}
+    .btn-primary:active{background:var(--accent2)}
+    .btn-scan{background:#7c3aed;padding:0 13px;font-size:18px}
+    .btn-scan:active{background:#6d28d9}
+
+    .status{padding:8px 16px;font-size:13px;color:var(--text2)}
+    .results{flex:1;overflow-y:auto;padding:0 16px 100px;-webkit-overflow-scrolling:touch}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
+    .card-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 10px;border-bottom:1px solid var(--border)}
+    .card-head .code{font-size:13px;font-weight:600;color:var(--accent);background:rgba(79,140,255,.12);padding:3px 10px;border-radius:8px}
+    .card-head .total{font-size:13px;font-weight:600;color:var(--green)}
+    .card-body{padding:12px 16px 14px}
+    .field{display:flex;margin-bottom:6px}
+    .field .label{min-width:56px;font-size:12px;font-weight:600;color:var(--text2)}
+    .field .value{font-size:14px;color:var(--text);word-break:break-all}
+    .loc-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+    .loc-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:10px;
+      font-size:13px;font-weight:500;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2)}
+    .loc-chip .loc-name{color:var(--text)}
+    .loc-chip .loc-qty{color:var(--green);font-weight:700}
+    .no-stock{color:var(--text2);font-size:13px;font-style:italic;margin-top:8px}
+
+    .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;text-align:center}
+    .empty-icon{font-size:48px;margin-bottom:16px;opacity:.5}
+    .empty-title{font-size:16px;font-weight:600;margin-bottom:6px}
+    .empty-desc{font-size:13px;color:var(--text2)}
+
+    .loading{display:none;justify-content:center;padding:40px}
+    .loading.show{display:flex}
+    .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite}
+    .error-msg{margin:12px 16px;padding:12px 16px;background:rgba(248,113,113,.1);
+      border:1px solid rgba(248,113,113,.25);border-radius:var(--radius);font-size:13px;color:var(--red);display:none}
+
+    /* ── 스캐너 오버레이 ── */
+    .scanner-overlay{position:fixed;inset:0;z-index:100;background:#000;display:none;flex-direction:column}
+    .scanner-overlay.show{display:flex}
+    .sc-top{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;
+      background:rgba(15,17,23,.85);padding-top:max(10px,env(safe-area-inset-top))}
+    .sc-top h2{font-size:15px;font-weight:700;color:#fff}
+    .sc-btns{display:flex;gap:6px}
+    .sc-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;
+      height:34px;padding:0 10px;border-radius:10px;font-size:12px;font-weight:500;
+      font-family:var(--font);cursor:pointer;display:inline-flex;align-items:center;gap:3px;
+      -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);flex-shrink:0}
+    .sc-btn:active{background:rgba(255,255,255,.2)}
+    .sc-btn.active{background:rgba(251,191,36,.9);color:#000;border-color:transparent}
+    .sc-btn.sw{background:rgba(79,140,255,.2);border-color:rgba(79,140,255,.3)}
+
+    .sc-camera{flex:1;position:relative;display:flex;align-items:center;justify-content:center;background:#000;overflow:hidden}
+    #scanVideo{width:100%;height:100%;-o-object-fit:cover;object-fit:cover}
+    .sc-guide-wrap{position:fixed;inset:0;z-index:110;pointer-events:none;display:flex;align-items:center;justify-content:center}
+    .sc-guide{position:relative;width:90%;max-width:440px;aspect-ratio:1.8/1;border:2.5px solid var(--green);
+      border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.5)}
+    .sc-guide-line{position:absolute;left:8%;right:8%;height:2px;background:var(--green);border-radius:2px;
+      opacity:.7;animation:scanAnim 2s ease-in-out infinite alternate}
+    @keyframes scanAnim{0%{top:15%}100%{top:85%}}
+
+    /* iOS QuaggaJS */
+    #iosScanner{flex:1;background:#000;display:none;position:relative;overflow:hidden}
+    #iosScanner video,#iosScanner canvas{width:100%!important;height:100%!important;
+      -o-object-fit:cover;object-fit:cover;position:absolute;top:0;left:0}
+    #iosScanner canvas.drawingBuffer{display:none!important}
+
+    .sc-bottom{position:fixed;bottom:0;left:0;right:0;z-index:120;background:rgba(15,17,23,.85);
+      -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+      padding:10px 16px;padding-bottom:max(10px,env(safe-area-inset-bottom));text-align:center}
+    .sc-hint{font-size:13px;color:var(--text2)}
+    .sc-read{font-size:12px;color:var(--green);margin-top:3px;min-height:17px;font-weight:600}
+    .sc-cam-info{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px}
+
+    @keyframes sp{to{transform:rotate(360deg)}}
+    #cropCanvas{display:none}
+  </style>
+</head>
+<body>
+
+<!-- ══ 메인 화면 ══ -->
+<div class="app">
+  <div class="header">
+    <h1>📦 재고 위치 조회</h1>
+    <p>품목코드 또는 품목명 입력 · 바코드 스캔</p>
+  </div>
+  <div class="search-wrap">
+    <div class="search-box">
+      <input id="q" type="search" placeholder="품목코드 / 품목명" enterkeyhint="search"
+             autocomplete="off" autocorrect="off" autocapitalize="off">
+      <button class="btn btn-scan" onclick="openScanner()">📷</button>
+      <button class="btn btn-primary" id="btnSearch" onclick="doSearch()">검색</button>
+    </div>
+  </div>
+  <div class="error-msg" id="error"></div>
+  <div class="status" id="status"></div>
+  <div class="loading" id="loading"><div class="spinner"></div></div>
+  <div class="results" id="results">
+    <div class="empty">
+      <div class="empty-icon">🔍</div>
+      <div class="empty-title">검색어를 입력하세요</div>
+      <div class="empty-desc">품목코드 일부 또는 품목명으로 검색<br>📷 바코드 스캔도 가능합니다</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 스캐너 오버레이 ══ -->
+<div class="scanner-overlay" id="scannerOverlay">
+  <div class="sc-top">
+    <h2>📷 바코드 스캔</h2>
+    <div class="sc-btns">
+      <button class="sc-btn sw" id="btnSwitch" onclick="switchCamera()">🔄 전환</button>
+      <button class="sc-btn" id="btnTorch" onclick="toggleTorch()">🔦</button>
+      <button class="sc-btn" onclick="closeScanner()">닫기</button>
+    </div>
+  </div>
+  <!-- Android -->
+  <div class="sc-camera" id="androidCam"><video id="scanVideo" autoplay playsinline muted></video></div>
+  <div class="sc-guide-wrap" id="scanGuide"><div class="sc-guide"><div class="sc-guide-line"></div></div></div>
+  <!-- iOS -->
+  <div id="iosScanner"></div>
+  <div class="sc-bottom">
+    <div class="sc-hint">바코드를 카메라에 비춰주세요</div>
+    <div class="sc-read" id="scRead"></div>
+    <div class="sc-cam-info" id="scCamInfo"></div>
+  </div>
+</div>
+
+<canvas id="cropCanvas"></canvas>
+
+<script>
+/* ══════════════════════════════════════
+   설정 — GAS API URL을 여기에 입력
+   ══════════════════════════════════════ */
+var API_URL='https://script.google.com/macros/s/여기에_배포ID_입력/exec';
+
+/* ══ 요소 참조 ══ */
+var qEl=document.getElementById('q');
+var btnSearch=document.getElementById('btnSearch');
+var resultsEl=document.getElementById('results');
+var statusEl=document.getElementById('status');
+var loadingEl=document.getElementById('loading');
+var errorEl=document.getElementById('error');
+var scannerOverlay=document.getElementById('scannerOverlay');
+var scReadEl=document.getElementById('scRead');
+var scCamInfoEl=document.getElementById('scCamInfo');
+
+var useNative='BarcodeDetector' in window;
+var CONFIRM_COUNT=3;
+var scanned=false,lastCode='',matchCount=0,torchOn=false;
+var activeTrack=null;
+
+qEl.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();doSearch()}});
+
+/* ══════════════════════════════════════
+   검색 (fetch → GAS API)
+   ══════════════════════════════════════ */
+
+function doSearch(){
+  var q=qEl.value.trim();if(!q){qEl.focus();return}
+  errorEl.style.display='none';statusEl.textContent='';
+  resultsEl.innerHTML='';loadingEl.classList.add('show');btnSearch.disabled=true;
+
+  fetch(API_URL+'?q='+encodeURIComponent(q))
+  .then(function(r){return r.json()})
+  .then(function(res){
+    loadingEl.classList.remove('show');btnSearch.disabled=false;
+    if(!res.success){showError(res.error);return}
+    renderResults(res.data||[]);
+  })
+  .catch(function(err){
+    loadingEl.classList.remove('show');btnSearch.disabled=false;
+    showError('서버 연결 실패: '+err.message);
+  });
+}
+
+function renderResults(data){
+  if(!data.length){
+    statusEl.textContent='검색 결과가 없습니다.';
+    resultsEl.innerHTML='<div class="empty"><div class="empty-icon">📭</div>'+
+      '<div class="empty-title">일치하는 품목이 없습니다</div><div class="empty-desc">다른 검색어를 시도해 보세요</div></div>';
+    return;
+  }
+  statusEl.textContent=data.length+'건 검색됨';
+  var h='';
+  for(var i=0;i<data.length;i++){
+    var d=data[i];
+    h+='<div class="card"><div class="card-head"><span class="code">'+esc(d.itemCode)+
+      '</span><span class="total">총 '+d.totalQty+'개</span></div><div class="card-body">'+
+      field('브랜드',d.brand)+field('품목명',d.itemName)+
+      (d.itemDesc?field('품목설명',d.itemDesc):'')+field('컬러',d.color)+field('사이즈',d.size);
+    if(d.locations.length){
+      h+='<div class="loc-row">';
+      for(var j=0;j<d.locations.length;j++){
+        h+='<div class="loc-chip"><span class="loc-name">'+esc(d.locations[j].name)+
+          '</span><span class="loc-qty">'+d.locations[j].qty+'</span></div>';
+      }
+      h+='</div>';
+    }else h+='<div class="no-stock">재고 없음</div>';
+    h+='</div></div>';
+  }
+  resultsEl.innerHTML=h;
+}
+
+function showError(m){errorEl.textContent='⚠️ '+m;errorEl.style.display='block'}
+function field(l,v){return'<div class="field"><span class="label">'+l+'</span><span class="value">'+esc(v||'-')+'</span></div>'}
+function esc(s){var d=document.createElement('span');d.textContent=s;return d.innerHTML}
+
+/* ══════════════════════════════════════
+   피드백
+   ══════════════════════════════════════ */
+var audioCtx;
+try{audioCtx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}
+function unlockAudio(){if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(function(){})}
+document.addEventListener('touchstart',unlockAudio,{passive:true});
+document.addEventListener('click',unlockAudio,{passive:true});
+
+function playBeep(){
+  if(!audioCtx)return;unlockAudio();
+  setTimeout(function(){try{
+    var t=audioCtx.currentTime;
+    var o1=audioCtx.createOscillator(),g1=audioCtx.createGain();
+    o1.type='square';o1.frequency.value=1200;g1.gain.value=1.0;
+    o1.connect(g1);g1.connect(audioCtx.destination);o1.start(t);o1.stop(t+0.15);
+    var o2=audioCtx.createOscillator(),g2=audioCtx.createGain();
+    o2.type='square';o2.frequency.value=1600;g2.gain.value=1.0;
+    o2.connect(g2);g2.connect(audioCtx.destination);o2.start(t+0.18);o2.stop(t+0.35);
+  }catch(e){}},30);
+}
+
+function confirmFeedback(){
+  var vibrated=false;
+  if(window.navigator&&typeof window.navigator.vibrate==='function'){
+    try{vibrated=window.navigator.vibrate(400)}catch(e){vibrated=false}
+  }
+  if(!vibrated)playBeep();
+}
+
+/* ══════════════════════════════════════
+   스캐너 — 오버레이 방식 (같은 페이지)
+   ══════════════════════════════════════ */
+var allCameras=[],currentCamIndex=0;
+var scanVideo,cropCanvas,cropCtx,nativeDetector,scanTimer;
+var iosQuagga=false;
+
+function openScanner(){
+  scanned=false;lastCode='';matchCount=0;torchOn=false;
+  scReadEl.textContent='';scCamInfoEl.textContent='';
+  document.getElementById('btnTorch').classList.remove('active');
+  scannerOverlay.classList.add('show');
+
+  if(useNative)initAndroidScanner();else initIOSScanner();
+}
+
+function closeScanner(){
+  scannerOverlay.classList.remove('show');
+  if(useNative)stopAndroid();
+  else{try{Quagga.stop()}catch(e){} iosQuagga=false;}
+}
+
+/* ── 카메라 목록 ── */
+function discoverCameras(){
+  return navigator.mediaDevices.enumerateDevices().then(function(devs){
+    allCameras=devs.filter(function(d){
+      if(d.kind!=='videoinput')return false;
+      var l=(d.label||'').toLowerCase();
+      return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0;
+    });
+    if(!allCameras.length)allCameras=devs.filter(function(d){return d.kind==='videoinput'});
+    var s='';try{s=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
+    if(s){for(var i=0;i<allCameras.length;i++){if(allCameras[i].deviceId===s){currentCamIndex=i;break}}}
+    if(allCameras.length>0)document.getElementById('btnSwitch').textContent='🔄 전환 ('+allCameras.length+'대)';
+  });
+}
+
+function switchCamera(){
+  if(allCameras.length<=1){scCamInfoEl.textContent='전환 가능한 카메라가 없습니다';return}
+  currentCamIndex=(currentCamIndex+1)%allCameras.length;
+  lastCode='';matchCount=0;scReadEl.textContent='';torchOn=false;
+  document.getElementById('btnTorch').classList.remove('active');
+  scCamInfoEl.textContent='전환 중...';
+  if(useNative)startAndroidCam(currentCamIndex);else restartQuagga(currentCamIndex);
+}
+
+function toggleTorch(){
+  if(!activeTrack){try{var v=document.querySelector('#iosScanner video');
+    if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}}
+  if(!activeTrack)return;
+  try{var caps=activeTrack.getCapabilities?activeTrack.getCapabilities():{};
+    if(!caps.torch)return;torchOn=!torchOn;
+    activeTrack.applyConstraints({advanced:[{torch:torchOn}]}).then(function(){
+      document.getElementById('btnTorch').classList.toggle('active',torchOn)}).catch(function(){torchOn=false})}catch(e){}
+}
+
+/* ── 스캔 결과 (공통) ── */
+function onCodeRead(code){
+  if(scanned)return;
+  if(code===lastCode)matchCount++;else{lastCode=code;matchCount=1}
+  scReadEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
+  if(matchCount>=CONFIRM_COUNT)onScanConfirmed(code);
+}
+
+function onScanConfirmed(code){
+  if(scanned)return;scanned=true;
+  confirmFeedback();
+  closeScanner();
+  qEl.value=code;
+  doSearch();
+}
+
+/* ══ Android: BarcodeDetector ══ */
+
+function initAndroidScanner(){
+  document.getElementById('iosScanner').style.display='none';
+  document.getElementById('androidCam').style.display='flex';
+  document.getElementById('scanGuide').style.display='flex';
+
+  scanVideo=document.getElementById('scanVideo');
+  cropCanvas=document.getElementById('cropCanvas');
+  cropCtx=cropCanvas.getContext('2d');
+  if(!nativeDetector)nativeDetector=new BarcodeDetector({
+    formats:['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','code_93','codabar','qr_code']});
+
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})
+  .then(function(stream){
+    scanVideo.srcObject=stream;activeTrack=stream.getVideoTracks()[0];
+    scCamInfoEl.textContent=activeTrack.label||'카메라';
+    return scanVideo.play();
+  }).then(function(){return discoverCameras()})
+  .then(function(){
+    if(allCameras.length>0&&currentCamIndex>0)startAndroidCam(currentCamIndex);
+    else startAndroidScan();
+  }).catch(function(){scCamInfoEl.textContent='카메라 권한을 확인해 주세요'});
+}
+
+function startAndroidCam(idx){
+  stopAndroid();var cam=allCameras[idx];if(!cam)return;
+  navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:cam.deviceId}},audio:false})
+  .catch(function(){return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})})
+  .then(function(stream){
+    scanVideo.srcObject=stream;activeTrack=stream.getVideoTracks()[0];
+    var s=activeTrack.getSettings?activeTrack.getSettings():{};
+    scCamInfoEl.textContent=(activeTrack.label||'카메라 '+(idx+1))+' ('+(s.width||'?')+'x'+(s.height||'?')+')';
+    try{localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}
+    return scanVideo.play();
+  }).then(function(){startAndroidScan()});
+}
+
+function startAndroidScan(){
+  if(scanTimer)clearInterval(scanTimer);
+  scanTimer=setInterval(function(){
+    if(scanned||scanVideo.readyState<2)return;
+    var vw=scanVideo.videoWidth,vh=scanVideo.videoHeight;if(!vw||!vh)return;
+    var gw=vw*.9,gh=gw/1.8,gx=(vw-gw)/2,gy=(vh-gh)/2;
+    cropCanvas.width=gw;cropCanvas.height=gh;
+    cropCtx.drawImage(scanVideo,gx,gy,gw,gh,0,0,gw,gh);
+    nativeDetector.detect(cropCanvas).then(function(r){
+      if(r.length>0)onCodeRead(r[0].rawValue);
+      else if(matchCount>0){matchCount=0;lastCode='';scReadEl.textContent=''}
+    }).catch(function(){});
+  },100);
+}
+
+function stopAndroid(){
+  if(scanTimer){clearInterval(scanTimer);scanTimer=null}
+  if(scanVideo&&scanVideo.srcObject){scanVideo.srcObject.getTracks().forEach(function(t){t.stop()});scanVideo.srcObject=null}
+  activeTrack=null;
+}
+
+/* ══ iOS: QuaggaJS ══ */
+
+function initIOSScanner(){
+  document.getElementById('androidCam').style.display='none';
+  document.getElementById('scanGuide').style.display='none';
+  document.getElementById('iosScanner').style.display='block';
+
+  Quagga.init({
+    inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
+      constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
+    decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader',
+      'upc_reader','upc_e_reader','i2of5_reader','codabar_reader']},
+    locate:true,frequency:10
+  },function(err){
+    if(err){scCamInfoEl.textContent='카메라 시작 실패: '+err;return}
+    Quagga.start();iosQuagga=true;
+    scCamInfoEl.textContent='iOS — QuaggaJS';
+    try{var v=document.querySelector('#iosScanner video');
+      if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+    discoverCameras();
+  });
+
+  Quagga.onDetected(function(result){
+    if(scanned)return;
+    var code=result.codeResult.code;
+    if(code)onCodeRead(code);
+  });
+}
+
+function restartQuagga(idx){
+  try{Quagga.stop()}catch(e){}iosQuagga=false;
+  var cam=allCameras[idx];
+  var constraints=cam?{deviceId:{exact:cam.deviceId}}:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
+  setTimeout(function(){
+    Quagga.init({
+      inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),constraints:constraints},
+      decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader',
+        'upc_reader','upc_e_reader','i2of5_reader','codabar_reader']},
+      locate:true,frequency:10
+    },function(err){
+      if(err){scCamInfoEl.textContent='전환 실패';return}
+      Quagga.start();iosQuagga=true;activeTrack=null;
+      try{var v=document.querySelector('#iosScanner video');
+        if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
+          scCamInfoEl.textContent=activeTrack.label||'카메라 '+(idx+1)}}catch(e){}
+      try{if(cam)localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}
+    });
+  },300);
+}
+</script>
+</body>
+</html>
