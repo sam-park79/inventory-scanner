@@ -176,6 +176,37 @@
       border-radius:50%;animation:sp .7s linear infinite}
     .proc-text{font-size:15px;color:var(--text)}
 
+    /* 처리 결과 */
+    .result-overlay{position:fixed;inset:0;z-index:400;background:rgba(0,0,0,.75);
+      display:none;align-items:center;justify-content:center;padding:20px}
+    .result-overlay.show{display:flex}
+    .result-box{background:var(--card);border:1px solid var(--border);border-radius:18px;
+      padding:24px 20px;width:100%;max-width:380px;text-align:center}
+    .result-icon{font-size:48px;margin-bottom:12px}
+    .result-title{font-size:18px;font-weight:700;margin-bottom:16px}
+    .result-rows{text-align:left;margin-bottom:12px}
+    .result-row{display:flex;justify-content:space-between;align-items:center;
+      padding:10px 14px;border-radius:10px;margin-bottom:6px;font-size:14px}
+    .result-row.loc{background:rgba(79,140,255,.1);color:var(--accent)}
+    .result-row.req{background:var(--surface);color:var(--text)}
+    .result-row.ok{background:rgba(52,211,153,.1);color:var(--green)}
+    .result-row.fail{background:rgba(248,113,113,.1);color:var(--red)}
+    .result-row .rlabel{font-weight:600}
+    .result-row .rvalue{font-weight:700}
+    .detail-link{font-size:12px;color:var(--text2);cursor:pointer;text-decoration:underline;margin-left:6px}
+    .detail-link:active{color:var(--text)}
+    .result-detail{text-align:left;margin-bottom:12px}
+    .detail-section{background:var(--surface);border:1px solid var(--border);border-radius:10px;
+      padding:10px 12px;margin-bottom:8px;display:none;max-height:150px;overflow-y:auto;
+      -webkit-overflow-scrolling:touch}
+    .detail-section.show{display:block}
+    .detail-section .dt{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px}
+    .detail-section .dc{font-size:12px;font-family:monospace;color:var(--text);line-height:1.8;word-break:break-all}
+    .detail-section.fail-detail .dc{color:var(--red)}
+    .result-ok{width:100%;height:44px;border:none;border-radius:12px;background:var(--accent);
+      color:#fff;font-size:15px;font-weight:600;font-family:var(--font);cursor:pointer;margin-top:4px}
+    .result-ok:active{background:var(--accent2)}
+
     @keyframes sp{to{transform:rotate(360deg)}}
     #cropCanvas{display:none}
   </style>
@@ -275,6 +306,17 @@
 <div class="processing-overlay" id="procOverlay">
   <div class="proc-spinner"></div>
   <div class="proc-text" id="procText">상품 위치 업데이트 중...</div>
+</div>
+
+<!-- ══ 처리 결과 ══ -->
+<div class="result-overlay" id="resultOverlay">
+  <div class="result-box">
+    <div class="result-icon" id="resultIcon">✅</div>
+    <div class="result-title" id="resultTitle">상품 이동 완료</div>
+    <div class="result-rows" id="resultRows"></div>
+    <div class="result-detail" id="resultDetail"></div>
+    <button class="result-ok" onclick="closeResult()">확인</button>
+  </div>
 </div>
 
 <canvas id="cropCanvas"></canvas>
@@ -716,22 +758,51 @@ executeMove=function(){
       for(var ri=0;ri<inventory.length;ri++){if(mc[inventory[ri].c])inventory[ri].p=location}
     }
 
-    alert(location
-      ?'✅ 상품 이동 완료\n\n• 위치: '+res.location+'\n• 처리: '+res.updated+'건\n• 상품: '+res.itemCount+'종'
-      :'✅ 상품위치 삭제 완료\n\n• 처리: '+res.updated+'건\n• 상품: '+res.itemCount+'종');
+    /* 결과 화면 표시 */
+    var isDelete=!location;
+    var sc=res.successCodes||[];
+    var fc=res.failedCodes||[];
+    var req=res.requested||items.length;
+
+    document.getElementById('resultIcon').textContent=fc.length>0?'⚠️':'✅';
+    document.getElementById('resultTitle').textContent=isDelete?'상품위치 삭제 완료':'상품 이동 완료';
+
+    var rows='';
+    if(!isDelete)rows+='<div class="result-row loc"><span class="rlabel">위치</span><span class="rvalue">'+esc(res.location)+'</span></div>';
+    rows+='<div class="result-row req"><span class="rlabel">요청</span><span class="rvalue">'+req+'건</span></div>';
+    rows+='<div class="result-row ok"><span class="rlabel">처리</span><span class="rvalue">'+sc.length+'건 <span class="detail-link" onclick="toggleDetail(\'okDetail\')">상세보기</span></span></div>';
+    if(fc.length>0){
+      rows+='<div class="result-row fail"><span class="rlabel">실패</span><span class="rvalue">'+fc.length+'건 <span class="detail-link" onclick="toggleDetail(\'failDetail\')">상세보기</span></span></div>';
+    }
+    document.getElementById('resultRows').innerHTML=rows;
+
+    var detail='';
+    detail+='<div class="detail-section" id="okDetail"><div class="dt">처리 완료 품목코드</div><div class="dc">'+(sc.length>0?sc.join('<br>'):'없음')+'</div></div>';
+    if(fc.length>0){
+      detail+='<div class="detail-section fail-detail" id="failDetail"><div class="dt">실패 품목코드 (Data/Data2에 없음)</div><div class="dc">'+fc.join('<br>')+'</div></div>';
+    }
+    document.getElementById('resultDetail').innerHTML=detail;
 
     document.getElementById('reviewOverlay').classList.remove('show');
     document.getElementById('scannerOverlay').classList.remove('show');
-
-    /* history 메인으로 복귀 */
-    if(historyDepth>0)history.go(-historyDepth);
-    historyDepth=0;
+    document.getElementById('resultOverlay').classList.add('show');
   })
   .catch(function(err){
     document.getElementById('procOverlay').classList.remove('show');
     alert('서버 연결 실패: '+err.message);
   });
 };
+
+function toggleDetail(id){
+  var el=document.getElementById(id);
+  if(el)el.classList.toggle('show');
+}
+
+function closeResult(){
+  document.getElementById('resultOverlay').classList.remove('show');
+  if(historyDepth>0)history.go(-historyDepth);
+  historyDepth=0;
+}
 </script>
 </body>
 </html>
