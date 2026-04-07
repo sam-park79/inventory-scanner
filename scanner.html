@@ -121,6 +121,8 @@ var useNative='BarcodeDetector' in window;
 
 /* ══════════════════════════════════════
    피드백 (확정 시에만)
+   - Android: vibrate() 성공 → 진동만, 실패 → 비프 fallback
+   - iOS: vibrate 미지원 → 비프만
    ══════════════════════════════════════ */
 var audioCtx;
 try{audioCtx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}
@@ -128,13 +130,7 @@ function unlockAudio(){if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume
 document.addEventListener('touchstart',unlockAudio,{passive:true});
 document.addEventListener('click',unlockAudio,{passive:true});
 
-function confirmFeedback(){
-  /* 진동 — 단순하고 길게 */
-  if(window.navigator&&window.navigator.vibrate){
-    window.navigator.vibrate(400);
-  }
-
-  /* 비프음 */
+function playBeep(){
   if(!audioCtx)return;
   unlockAudio();
   setTimeout(function(){
@@ -155,6 +151,20 @@ function confirmFeedback(){
       o2.start(t+0.18);o2.stop(t+0.35);
     }catch(e){}
   },30);
+}
+
+function confirmFeedback(){
+  var vibrated=false;
+
+  /* Android: vibrate 시도 */
+  if(window.navigator&&typeof window.navigator.vibrate==='function'){
+    try{vibrated=window.navigator.vibrate(400)}catch(e){vibrated=false}
+  }
+
+  /* 진동 실패 또는 미지원(iOS) → 비프 fallback */
+  if(!vibrated){
+    playBeep();
+  }
 }
 
 /* ══ 공통: 카메라 목록 ══ */
