@@ -128,6 +128,18 @@
     .rv-table .code-cell{font-family:monospace;font-size:12px;word-break:break-all}
     .rv-bottom{padding:12px 16px;border-top:1px solid var(--border);
       padding-bottom:max(12px,env(safe-area-inset-bottom))}
+    .rv-manual{padding:10px 16px;border-top:1px solid var(--border);background:var(--surface)}
+    .rv-manual-row{display:flex;gap:6px;align-items:center}
+    .rv-manual-row input[type="text"]{flex:1;min-width:0;height:38px;padding:0 10px;
+      border:1.5px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);
+      font-size:14px;font-family:monospace;outline:none}
+    .rv-manual-row input[type="text"]:focus{border-color:var(--accent)}
+    .rv-manual-row input[type="number"]{height:38px;padding:0 6px;border:1.5px solid var(--border);
+      border-radius:10px;background:var(--bg);color:var(--text);font-size:14px;font-family:var(--font);outline:none}
+    .rv-manual-btn{height:38px;padding:0 14px;border:none;border-radius:10px;
+      background:var(--accent);color:#fff;font-size:13px;font-weight:600;
+      font-family:var(--font);cursor:pointer;flex-shrink:0}
+    .rv-manual-btn:active{background:var(--accent2)}
     .btn-move{width:100%;height:46px;border:none;border-radius:14px;background:var(--orange);
       color:#000;font-size:16px;font-weight:700;font-family:var(--font);cursor:pointer}
     .btn-move:active{background:#e5a800}
@@ -226,6 +238,13 @@
     <button class="rv-close" onclick="closeReview()">← 뒤로</button>
   </div>
   <div class="rv-body" id="rvBody"></div>
+  <div class="rv-manual">
+    <div class="rv-manual-row">
+      <input type="text" id="manualCode" placeholder="품목코드 직접 입력" autocomplete="off" autocapitalize="off">
+      <input type="number" id="manualQty" value="1" min="1" style="width:50px;text-align:center">
+      <button class="rv-manual-btn" onclick="addManualItem()">추가</button>
+    </div>
+  </div>
   <div class="rv-bottom">
     <button class="btn-move" id="btnMove" onclick="promptLocation()">📦 상품 이동 진행</button>
   </div>
@@ -538,11 +557,8 @@ function restartQuagga(idx){try{Quagga.stop()}catch(e){}var cam=allCameras[idx];
    리뷰 (상품 이동 확인)
    ══════════════════════════════════════ */
 
-function showReview(){
-  closeScanner();
+function renderReviewTable(){
   var keys=Object.keys(moveScannedItems);
-  if(keys.length===0){alert('스캔된 상품이 없습니다.');return}
-
   var h='<table class="rv-table"><thead><tr><th style="width:30px"><input type="checkbox" checked onchange="toggleAllCb(this)"></th><th>품목코드</th><th style="width:50px;text-align:center">수량</th></tr></thead><tbody>';
   for(var i=0;i<keys.length;i++){
     h+='<tr><td><input type="checkbox" class="rv-cb" checked data-code="'+esc(keys[i])+'"></td>'+
@@ -550,7 +566,28 @@ function showReview(){
   }
   h+='</tbody></table>';
   document.getElementById('rvBody').innerHTML=h;
+}
+
+function showReview(){
+  closeScanner();
+  renderReviewTable();
   document.getElementById('reviewOverlay').classList.add('show');
+  if(Object.keys(moveScannedItems).length===0){
+    document.getElementById('manualCode').focus();
+  }
+}
+
+function addManualItem(){
+  var codeEl=document.getElementById('manualCode');
+  var qtyEl=document.getElementById('manualQty');
+  var code=codeEl.value.trim();
+  var qty=parseInt(qtyEl.value)||1;
+  if(!code){codeEl.focus();return}
+  moveScannedItems[code]=(moveScannedItems[code]||0)+qty;
+  moveScannedTotal+=qty;
+  renderReviewTable();
+  codeEl.value='';qtyEl.value='1';
+  codeEl.focus();
 }
 
 function closeReview(){document.getElementById('reviewOverlay').classList.remove('show')}
