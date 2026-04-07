@@ -9,6 +9,7 @@
   <title>바코드 스캔</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     :root{
@@ -17,8 +18,8 @@
       --font:'Noto Sans KR',system-ui,-apple-system,sans-serif;
     }
     html,body{height:100%;background:#000;color:var(--text);font-family:var(--font);
-      font-size:15px;overflow:hidden;user-select:none}
-    .wrap{display:flex;flex-direction:column;height:100dvh}
+      font-size:15px;overflow:hidden;-webkit-user-select:none;user-select:none}
+    .wrap{display:flex;flex-direction:column;height:100dvh;height:100vh}
     .top{display:flex;justify-content:space-between;align-items:center;
       padding:10px 12px;background:rgba(15,17,23,.85);position:fixed;top:0;left:0;right:0;z-index:20;
       padding-top:max(10px,env(safe-area-inset-top))}
@@ -27,24 +28,26 @@
     .btn-t{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;
       height:34px;padding:0 10px;border-radius:10px;font-size:12px;font-weight:500;
       font-family:var(--font);cursor:pointer;display:inline-flex;align-items:center;gap:3px;
-      backdrop-filter:blur(8px);transition:background .2s;flex-shrink:0}
+      -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:background .2s;flex-shrink:0}
     .btn-t:active{background:rgba(255,255,255,.2)}
     .btn-t.active{background:rgba(251,191,36,.9);color:#000;border-color:transparent}
     .btn-t.switch{background:rgba(79,140,255,.2);border-color:rgba(79,140,255,.3)}
     a.btn-t{text-decoration:none}
     .video-wrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;
       background:#000;overflow:hidden}
-    #video{width:100%;height:100%;object-fit:cover}
+    #video{width:100%;height:100%;-o-object-fit:cover;object-fit:cover}
     .scan-overlay{position:fixed;inset:0;z-index:10;pointer-events:none;
       display:flex;align-items:center;justify-content:center}
     .scan-guide{position:relative;width:90%;max-width:440px;aspect-ratio:1.8/1;
       border:2.5px solid var(--green);border-radius:16px;
       box-shadow:0 0 0 9999px rgba(0,0,0,.5)}
     .scan-line{position:absolute;left:8%;right:8%;height:2px;background:var(--green);
-      border-radius:2px;opacity:.7;animation:scanAnim 2s ease-in-out infinite alternate}
+      border-radius:2px;opacity:.7;-webkit-animation:scanAnim 2s ease-in-out infinite alternate;
+      animation:scanAnim 2s ease-in-out infinite alternate}
+    @-webkit-keyframes scanAnim{0%{top:15%}100%{top:85%}}
     @keyframes scanAnim{0%{top:15%}100%{top:85%}}
     .bottom-bar{position:fixed;bottom:0;left:0;right:0;z-index:20;
-      background:rgba(15,17,23,.85);backdrop-filter:blur(8px);
+      background:rgba(15,17,23,.85);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
       padding:10px 16px;padding-bottom:max(10px,env(safe-area-inset-bottom));text-align:center}
     .hint{font-size:13px;color:var(--text2);line-height:1.4}
     .read-count{font-size:12px;color:var(--green);margin-top:3px;min-height:17px;font-weight:600}
@@ -60,7 +63,8 @@
       border:1px solid rgba(52,211,153,.25);margin-bottom:12px;word-break:break-all}
     .ok-msg{font-size:14px;color:var(--text2);margin-bottom:24px}
     .ok-sp{width:24px;height:24px;border:3px solid var(--border);
-      border-top-color:var(--green);border-radius:50%;animation:sp .7s linear infinite}
+      border-top-color:var(--green);border-radius:50%;-webkit-animation:sp .7s linear infinite;animation:sp .7s linear infinite}
+    @-webkit-keyframes sp{to{-webkit-transform:rotate(360deg);transform:rotate(360deg)}}
     @keyframes sp{to{transform:rotate(360deg)}}
     .err-full{position:fixed;inset:0;background:var(--bg);z-index:50;
       display:none;flex-direction:column;align-items:center;justify-content:center;
@@ -69,7 +73,7 @@
     .err-full .icon{font-size:56px;margin-bottom:20px;opacity:.6}
     .err-full p{font-size:15px;color:var(--text2);line-height:1.7;margin-bottom:20px}
     .err-full a{color:var(--accent);font-size:14px}
-    #cropCanvas{display:none}
+    #cropCanvas,#hiddenDiv{display:none}
   </style>
 </head>
 <body>
@@ -77,7 +81,7 @@
     <div class="top">
       <h1>📷 바코드 스캔</h1>
       <div class="top-btns">
-        <button class="btn-t switch" id="btnSwitch" onclick="switchCamera()">🔄 카메라 전환</button>
+        <button class="btn-t switch" id="btnSwitch" onclick="switchCamera()">🔄 전환</button>
         <button class="btn-t" id="btnTorch" onclick="toggleTorch()">🔦</button>
         <a class="btn-t" id="btnBack" href="#">닫기</a>
       </div>
@@ -107,252 +111,277 @@
   </div>
 
   <canvas id="cropCanvas"></canvas>
+  <div id="hiddenDiv"></div>
 
 <script>
-var CONFIRM_COUNT=3;
-var SCAN_INTERVAL=100;
+var CONFIRM_COUNT = 3;
+var SCAN_INTERVAL_NATIVE = 100;  /* BarcodeDetector (Android) */
+var SCAN_INTERVAL_LIB = 250;    /* html5-qrcode 폴백 (iOS) — 더 느림 */
 
-var params=new URLSearchParams(window.location.search);
-var returnUrl=params.get('returnUrl')||'';
-document.getElementById('btnBack').href=returnUrl?decodeURIComponent(returnUrl):'#';
-document.getElementById('btnBackErr').href=returnUrl?decodeURIComponent(returnUrl):'#';
+var params = new URLSearchParams(window.location.search);
+var returnUrl = params.get('returnUrl') || '';
+document.getElementById('btnBack').href = returnUrl ? decodeURIComponent(returnUrl) : '#';
+document.getElementById('btnBackErr').href = returnUrl ? decodeURIComponent(returnUrl) : '#';
 
-var video=document.getElementById('video');
-var cropCanvas=document.getElementById('cropCanvas');
-var cropCtx=cropCanvas.getContext('2d');
-var readCountEl=document.getElementById('readCount');
-var camInfoEl=document.getElementById('camInfo');
+var video = document.getElementById('video');
+var cropCanvas = document.getElementById('cropCanvas');
+var cropCtx = cropCanvas.getContext('2d');
+var readCountEl = document.getElementById('readCount');
+var camInfoEl = document.getElementById('camInfo');
 
-var videoTrack=null;
-var torchOn=false;
-var scanned=false;
-var detector=null;
-var scanTimer=null;
-var lastCode='';
-var matchCount=0;
+var videoTrack = null;
+var torchOn = false;
+var scanned = false;
+var scanTimer = null;
+var lastCode = '';
+var matchCount = 0;
+
+/* ── 디코더 선택 ── */
+var useNative = 'BarcodeDetector' in window;
+var nativeDetector = null;
+var libDecoder = null;
+var libBusy = false;
 
 /* ══════════════════════════════════════
    카메라 관리
-   - 후면 카메라 목록을 수집하고 순환 전환
-   - 선택한 카메라 ID를 localStorage에 저장
    ══════════════════════════════════════ */
 
-var rearCameras=[];     /* {deviceId, label}[] */
-var currentCamIndex=0;
+var rearCameras = [];
+var currentCamIndex = 0;
 
-async function discoverCameras(){
-  /* 권한 획득을 위한 임시 스트림 */
-  try{
-    var tmp=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
-    tmp.getTracks().forEach(function(t){t.stop()});
-  }catch(e){}
-
-  var devices=await navigator.mediaDevices.enumerateDevices();
-  var allVideo=devices.filter(function(d){return d.kind==='videoinput'});
-
-  /* 후면 카메라 판별: label에 back/rear/후면 포함, 또는 front/전면 미포함 */
-  rearCameras=allVideo.filter(function(d){
-    var lbl=(d.label||'').toLowerCase();
-    if(lbl.indexOf('front')>=0||lbl.indexOf('전면')>=0||lbl.indexOf('selfie')>=0) return false;
-    /* label이 없으면 일단 포함 */
-    if(!lbl) return true;
-    return true; /* 전면 아닌 모든 카메라 포함 */
-  });
-
-  /* 전면만 걸러도 카메라가 없으면 전체 사용 */
-  if(rearCameras.length===0) rearCameras=allVideo;
-
-  /* 저장된 카메라 ID가 있으면 해당 인덱스로 시작 */
-  var savedId=localStorage.getItem('SCAN_CAM_ID');
-  if(savedId){
-    var idx=rearCameras.findIndex(function(c){return c.deviceId===savedId});
-    if(idx>=0) currentCamIndex=idx;
-  }
-}
-
-async function startCameraByIndex(index){
-  stopCamera();
-
-  var cam=rearCameras[index];
-  if(!cam) return;
-
-  try{
-    var stream=await navigator.mediaDevices.getUserMedia({
-      video:{deviceId:{exact:cam.deviceId}},
-      audio:false
+function discoverCameras() {
+  return navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'environment' }, audio: false
+  }).then(function(tmp) {
+    tmp.getTracks().forEach(function(t) { t.stop(); });
+    return navigator.mediaDevices.enumerateDevices();
+  }).then(function(devices) {
+    var allVideo = devices.filter(function(d) { return d.kind === 'videoinput'; });
+    rearCameras = allVideo.filter(function(d) {
+      var lbl = (d.label || '').toLowerCase();
+      return lbl.indexOf('front') < 0 && lbl.indexOf('전면') < 0 && lbl.indexOf('selfie') < 0;
     });
+    if (rearCameras.length === 0) rearCameras = allVideo;
 
-    video.srcObject=stream;
-    await video.play();
-    videoTrack=stream.getVideoTracks()[0];
-
-    /* 카메라 정보 표시 */
-    var settings=videoTrack.getSettings();
-    var label=videoTrack.label||cam.label||('카메라 '+(index+1));
-    camInfoEl.textContent=label+' ('+(settings.width||'?')+'x'+(settings.height||'?')+')';
-
-    /* 선택 기억 */
-    localStorage.setItem('SCAN_CAM_ID',cam.deviceId);
-
-    /* 스캔 시작 */
-    if(detector&&!scanned) startScanning();
-
-  }catch(e){
-    /* exact 실패 시 ideal로 재시도 */
-    try{
-      var stream2=await navigator.mediaDevices.getUserMedia({
-        video:{deviceId:{ideal:cam.deviceId},facingMode:'environment'},
-        audio:false
-      });
-      video.srcObject=stream2;
-      await video.play();
-      videoTrack=stream2.getVideoTracks()[0];
-      camInfoEl.textContent=(videoTrack.label||'카메라')
-      if(detector&&!scanned) startScanning();
-    }catch(e2){
-      camInfoEl.textContent='카메라 시작 실패';
+    var savedId = '';
+    try { savedId = localStorage.getItem('SCAN_CAM_ID') || ''; } catch(e) {}
+    if (savedId) {
+      var idx = -1;
+      for (var i = 0; i < rearCameras.length; i++) {
+        if (rearCameras[i].deviceId === savedId) { idx = i; break; }
+      }
+      if (idx >= 0) currentCamIndex = idx;
     }
-  }
+  });
 }
 
-/** 카메라 전환 버튼 */
-async function switchCamera(){
-  if(rearCameras.length<=1){
-    camInfoEl.textContent='전환 가능한 카메라가 없습니다';
+function startCameraByIndex(index) {
+  stopCamera();
+  var cam = rearCameras[index];
+  if (!cam) return Promise.reject('no camera');
+
+  return navigator.mediaDevices.getUserMedia({
+    video: { deviceId: { exact: cam.deviceId } }, audio: false
+  }).catch(function() {
+    return navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' }, audio: false
+    });
+  }).then(function(stream) {
+    video.srcObject = stream;
+    videoTrack = stream.getVideoTracks()[0];
+
+    var settings = videoTrack.getSettings ? videoTrack.getSettings() : {};
+    var label = videoTrack.label || cam.label || ('카메라 ' + (index + 1));
+    camInfoEl.textContent = label + ' (' + (settings.width || '?') + 'x' + (settings.height || '?') + ')';
+
+    try { localStorage.setItem('SCAN_CAM_ID', cam.deviceId); } catch(e) {}
+
+    return video.play();
+  }).then(function() {
+    if (!scanned) startScanning();
+  });
+}
+
+function switchCamera() {
+  if (rearCameras.length <= 1) {
+    camInfoEl.textContent = '전환 가능한 카메라가 없습니다';
     return;
   }
-
-  currentCamIndex=(currentCamIndex+1)%rearCameras.length;
-  lastCode='';matchCount=0;readCountEl.textContent='';
-  torchOn=false;
+  currentCamIndex = (currentCamIndex + 1) % rearCameras.length;
+  lastCode = ''; matchCount = 0; readCountEl.textContent = '';
+  torchOn = false;
   document.getElementById('btnTorch').classList.remove('active');
-
-  camInfoEl.textContent='전환 중... ('+(currentCamIndex+1)+'/'+rearCameras.length+')';
-  await startCameraByIndex(currentCamIndex);
+  camInfoEl.textContent = '전환 중... (' + (currentCamIndex + 1) + '/' + rearCameras.length + ')';
+  startCameraByIndex(currentCamIndex);
 }
 
-/* ══ 초기화 ══ */
+/* ══════════════════════════════════════
+   초기화
+   ══════════════════════════════════════ */
 
-async function init(){
-  try{
-    await discoverCameras();
+function init() {
+  /* 디코더 초기화 */
+  if (useNative) {
+    nativeDetector = new BarcodeDetector({
+      formats: ['code_128','code_39','ean_13','ean_8',
+                'upc_a','upc_e','itf','code_93','codabar','qr_code']
+    });
+  } else {
+    /* iOS 폴백: html5-qrcode */
+    libDecoder = new Html5Qrcode('hiddenDiv');
+  }
 
-    if(rearCameras.length===0){
+  discoverCameras().then(function() {
+    if (rearCameras.length === 0) {
       showError('사용 가능한 카메라가 없습니다.');
       return;
     }
-
-    /* BarcodeDetector 초기화 */
-    if('BarcodeDetector' in window){
-      detector=new BarcodeDetector({
-        formats:['code_128','code_39','ean_13','ean_8',
-                 'upc_a','upc_e','itf','code_93','codabar','qr_code']
-      });
-    }else{
-      showError('이 브라우저는 바코드 인식을 지원하지 않습니다.');
-      return;
-    }
-
-    /* 카메라 수 표시 */
-    document.getElementById('btnSwitch').textContent=
-      '🔄 전환 ('+rearCameras.length+'대)';
-
-    await startCameraByIndex(currentCamIndex);
-
-  }catch(err){
+    document.getElementById('btnSwitch').textContent = '🔄 전환 (' + rearCameras.length + '대)';
+    return startCameraByIndex(currentCamIndex);
+  }).catch(function(err) {
     showError('카메라를 사용할 수 없습니다.<br>브라우저 설정에서 카메라 권한을 허용해 주세요.');
+  });
+}
+
+/* ══════════════════════════════════════
+   스캔 루프
+   ══════════════════════════════════════ */
+
+function startScanning() {
+  if (scanTimer) clearInterval(scanTimer);
+  var interval = useNative ? SCAN_INTERVAL_NATIVE : SCAN_INTERVAL_LIB;
+  scanTimer = setInterval(function() {
+    if (scanned || video.readyState < 2) return;
+    scanFrame();
+  }, interval);
+}
+
+function scanFrame() {
+  var vw = video.videoWidth;
+  var vh = video.videoHeight;
+  if (!vw || !vh) return;
+
+  /* 스캔 가이드 영역만 크롭 */
+  var guideW = vw * 0.90;
+  var guideH = guideW / 1.8;
+  var guideX = (vw - guideW) / 2;
+  var guideY = (vh - guideH) / 2;
+
+  cropCanvas.width = guideW;
+  cropCanvas.height = guideH;
+  cropCtx.drawImage(video, guideX, guideY, guideW, guideH, 0, 0, guideW, guideH);
+
+  if (useNative) {
+    scanWithNative();
+  } else {
+    scanWithLib();
   }
 }
 
-/* ══ 크롭 스캔 ══ */
-
-function startScanning(){
-  if(scanTimer) clearInterval(scanTimer);
-  scanTimer=setInterval(function(){
-    if(scanned||video.readyState<2)return;
-    scanCroppedRegion();
-  },SCAN_INTERVAL);
-}
-
-async function scanCroppedRegion(){
-  try{
-    var vw=video.videoWidth;
-    var vh=video.videoHeight;
-    if(!vw||!vh)return;
-    var guideW=vw*0.90;
-    var guideH=guideW/1.8;
-    var guideX=(vw-guideW)/2;
-    var guideY=(vh-guideH)/2;
-    cropCanvas.width=guideW;
-    cropCanvas.height=guideH;
-    cropCtx.drawImage(video,guideX,guideY,guideW,guideH,0,0,guideW,guideH);
-    var results=await detector.detect(cropCanvas);
-    if(results.length>0){
+/* ── Android: BarcodeDetector (네이티브) ── */
+function scanWithNative() {
+  nativeDetector.detect(cropCanvas).then(function(results) {
+    if (results.length > 0) {
       onCodeRead(results[0].rawValue);
-    }else{
-      if(matchCount>0){matchCount=0;lastCode='';readCountEl.textContent=''}
+    } else {
+      resetIfNeeded();
     }
-  }catch(e){}
+  }).catch(function() {});
 }
 
-function onCodeRead(code){
-  if(code===lastCode){matchCount++}
-  else{lastCode=code;matchCount=1}
-  readCountEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
-  if(matchCount>=CONFIRM_COUNT)onScanConfirmed(code);
+/* ── iOS: html5-qrcode (라이브러리 폴백) ── */
+function scanWithLib() {
+  if (libBusy) return;
+  libBusy = true;
+
+  cropCanvas.toBlob(function(blob) {
+    if (!blob) { libBusy = false; return; }
+
+    var file = new File([blob], 'frame.jpg', { type: 'image/jpeg' });
+
+    libDecoder.scanFile(file, false).then(function(decoded) {
+      libBusy = false;
+      if (decoded) onCodeRead(decoded);
+    }).catch(function() {
+      libBusy = false;
+      resetIfNeeded();
+    });
+  }, 'image/jpeg', 0.85);
 }
 
-/* ══ 확정 ══ */
+function resetIfNeeded() {
+  if (matchCount > 0) {
+    matchCount = 0;
+    lastCode = '';
+    readCountEl.textContent = '';
+  }
+}
 
-function onScanConfirmed(code){
-  if(scanned)return;
-  scanned=true;
-  if(scanTimer){clearInterval(scanTimer);scanTimer=null}
-  if(navigator.vibrate)navigator.vibrate(150);
-  document.getElementById('okCode').textContent=code;
+function onCodeRead(code) {
+  if (code === lastCode) { matchCount++; }
+  else { lastCode = code; matchCount = 1; }
+  readCountEl.textContent = '✓ ' + code + ' (' + matchCount + '/' + CONFIRM_COUNT + ')';
+  if (matchCount >= CONFIRM_COUNT) onScanConfirmed(code);
+}
+
+/* ══════════════════════════════════════
+   확정
+   ══════════════════════════════════════ */
+
+function onScanConfirmed(code) {
+  if (scanned) return;
+  scanned = true;
+  if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+  if (navigator.vibrate) navigator.vibrate(150);
+  document.getElementById('okCode').textContent = code;
   document.getElementById('okOverlay').classList.add('show');
   stopCamera();
-  if(returnUrl){
-    var url=decodeURIComponent(returnUrl);
-    var sep=url.indexOf('?')>=0?'&':'?';
-    setTimeout(function(){window.location.href=url+sep+'code='+encodeURIComponent(code)},800);
+  if (returnUrl) {
+    var url = decodeURIComponent(returnUrl);
+    var sep = url.indexOf('?') >= 0 ? '&' : '?';
+    setTimeout(function() {
+      window.location.href = url + sep + 'code=' + encodeURIComponent(code);
+    }, 800);
   }
 }
 
-/* ══ 조명 ══ */
+/* ══════════════════════════════════════
+   카메라 제어
+   ══════════════════════════════════════ */
 
-function toggleTorch(){
-  if(!videoTrack)return;
-  try{
-    var caps=videoTrack.getCapabilities?videoTrack.getCapabilities():{};
-    if(!caps.torch)return;
-    torchOn=!torchOn;
-    videoTrack.applyConstraints({advanced:[{torch:torchOn}]}).then(function(){
-      document.getElementById('btnTorch').classList.toggle('active',torchOn);
-    }).catch(function(){torchOn=false});
-  }catch(e){}
+function toggleTorch() {
+  if (!videoTrack) return;
+  try {
+    var caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+    if (!caps.torch) return;
+    torchOn = !torchOn;
+    videoTrack.applyConstraints({ advanced: [{ torch: torchOn }] }).then(function() {
+      document.getElementById('btnTorch').classList.toggle('active', torchOn);
+    }).catch(function() { torchOn = false; });
+  } catch(e) {}
 }
 
-function stopCamera(){
-  if(scanTimer){clearInterval(scanTimer);scanTimer=null}
-  if(video.srcObject){
-    video.srcObject.getTracks().forEach(function(t){t.stop()});
-    video.srcObject=null;
+function stopCamera() {
+  if (scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+  if (video.srcObject) {
+    video.srcObject.getTracks().forEach(function(t) { t.stop(); });
+    video.srcObject = null;
   }
-  videoTrack=null;
+  videoTrack = null;
 }
 
-function showError(msg){
-  document.getElementById('errMsg').innerHTML=msg;
+function showError(msg) {
+  document.getElementById('errMsg').innerHTML = msg;
   document.getElementById('errFull').classList.add('show');
 }
 
+/* ── 시작 ── */
 init();
 
-window.addEventListener('beforeunload',stopCamera);
-document.addEventListener('visibilitychange',function(){
-  if(document.hidden){stopCamera()}
-  else if(!scanned){scanned=false;lastCode='';matchCount=0;startCameraByIndex(currentCamIndex)}
+window.addEventListener('beforeunload', stopCamera);
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) { stopCamera(); }
+  else if (!scanned) { scanned = false; lastCode = ''; matchCount = 0; startCameraByIndex(currentCamIndex); }
 });
 </script>
 </body>
