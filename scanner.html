@@ -12,8 +12,8 @@
   <style>
     *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     :root{
-      --bg:#0f1117;--surface:#1a1d27;--border:#2e3345;
-      --text:#e8eaf0;--text2:#9ba1b5;--accent:#4f8cff;--green:#34d399;--red:#f87171;
+      --bg:#0f1117;--border:#2e3345;
+      --text:#e8eaf0;--text2:#9ba1b5;--green:#34d399;--accent:#4f8cff;
       --font:'Noto Sans KR',system-ui,-apple-system,sans-serif;
     }
     html,body{height:100%;background:#000;color:var(--text);font-family:var(--font);
@@ -22,7 +22,8 @@
     .wrap{display:flex;flex-direction:column;height:100dvh}
 
     .top{display:flex;justify-content:space-between;align-items:center;
-      padding:10px 16px;background:rgba(15,17,23,.85);position:fixed;top:0;left:0;right:0;z-index:20}
+      padding:10px 16px;background:rgba(15,17,23,.85);position:fixed;top:0;left:0;right:0;z-index:20;
+      padding-top:max(10px,env(safe-area-inset-top))}
     .top h1{font-size:16px;font-weight:700}
     .top-btns{display:flex;gap:8px}
     .btn-t{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;
@@ -37,7 +38,6 @@
       background:#000;overflow:hidden}
     #video{width:100%;height:100%;object-fit:cover}
 
-    /* 스캔 가이드: 근거리에 맞게 넓고 높게 */
     .scan-overlay{position:fixed;inset:0;z-index:10;pointer-events:none;
       display:flex;align-items:center;justify-content:center}
     .scan-guide{position:relative;width:90%;max-width:440px;aspect-ratio:1.8/1;
@@ -49,10 +49,9 @@
 
     .bottom-bar{position:fixed;bottom:0;left:0;right:0;z-index:20;
       background:rgba(15,17,23,.85);backdrop-filter:blur(8px);
-      padding:12px 20px;text-align:center}
+      padding:12px 20px;padding-bottom:max(12px,env(safe-area-inset-bottom));text-align:center}
     .hint{font-size:13px;color:var(--text2);line-height:1.5}
     .read-count{font-size:12px;color:var(--green);margin-top:4px;min-height:18px;font-weight:600}
-    .tap-hint{font-size:11px;color:rgba(255,255,255,.3);margin-top:2px}
 
     .ok-overlay{position:fixed;inset:0;background:rgba(15,17,23,.95);
       display:none;flex-direction:column;align-items:center;justify-content:center;
@@ -97,9 +96,8 @@
     </div>
 
     <div class="bottom-bar">
-      <div class="hint">8~15cm 거리에서 바코드를 비춰주세요</div>
+      <div class="hint">7~10cm 거리에서 바코드를 비춰주세요</div>
       <div class="read-count" id="readCount"></div>
-      <div class="tap-hint">흐리면 화면을 탭하여 초점을 맞추세요</div>
     </div>
   </div>
 
@@ -128,7 +126,6 @@ document.getElementById('btnBack').href=returnUrl?decodeURIComponent(returnUrl):
 document.getElementById('btnBackErr').href=returnUrl?decodeURIComponent(returnUrl):'#';
 
 var video=document.getElementById('video');
-var videoWrap=document.getElementById('videoWrap');
 var cropCanvas=document.getElementById('cropCanvas');
 var cropCtx=cropCanvas.getContext('2d');
 var readCountEl=document.getElementById('readCount');
@@ -141,20 +138,18 @@ var scanTimer=null;
 var lastCode='';
 var matchCount=0;
 
-/* ══ 1. 카메라 시작 ══ */
+/* ══ 카메라 시작 ══ */
 
 async function initCamera(){
   try{
     /*
-     * 핵심: 줌 없음, 고해상도, 자동초점만 요청
-     * 줌을 올리면 최소 초점거리가 멀어져 근거리에서 초점이 안 맞음
+     * 핵심: facingMode만 지정. 그 외 설정(해상도, 초점 등) 일절 건드리지 않음.
+     * 브라우저 기본 자동초점 = 네이티브 카메라 앱과 동일하게 동작.
+     * 해상도/초점모드를 명시적으로 요청하면 카메라가 다른 센서 모드를 선택하여
+     * 자동초점 성능이 달라질 수 있음.
      */
     var stream=await navigator.mediaDevices.getUserMedia({
-      video:{
-        facingMode:{ideal:'environment'},
-        width:{ideal:1920},
-        height:{ideal:1080}
-      },
+      video:{facingMode:'environment'},
       audio:false
     });
 
@@ -162,15 +157,7 @@ async function initCamera(){
     await video.play();
     videoTrack=stream.getVideoTracks()[0];
 
-    /* 연속 자동초점만 적용 (다른 설정 건드리지 않음) */
-    if(videoTrack){
-      try{
-        var caps=videoTrack.getCapabilities()||{};
-        if(caps.focusMode&&caps.focusMode.indexOf('continuous')>=0){
-          await videoTrack.applyConstraints({advanced:[{focusMode:'continuous'}]});
-        }
-      }catch(e){}
-    }
+    /* applyConstraints 호출하지 않음 — 기본 자동초점 그대로 사용 */
 
     if('BarcodeDetector' in window){
       detector=new BarcodeDetector({
@@ -187,7 +174,7 @@ async function initCamera(){
   }
 }
 
-/* ══ 2. 크롭 스캔 ══ */
+/* ══ 크롭 스캔 ══ */
 
 function startScanning(){
   if(!detector||scanned)return;
@@ -203,7 +190,6 @@ async function scanCroppedRegion(){
     var vh=video.videoHeight;
     if(!vw||!vh)return;
 
-    /* 스캔 가이드 영역 (CSS와 동일: 90% 너비, 1.8:1 비율) */
     var guideW=vw*0.90;
     var guideH=guideW/1.8;
     var guideX=(vw-guideW)/2;
@@ -218,37 +204,25 @@ async function scanCroppedRegion(){
     if(results.length>0){
       onCodeRead(results[0].rawValue);
     }else{
-      /* 일정 시간 인식 없으면 카운터 리셋 */
-      if(matchCount>0){
-        matchCount=0;
-        lastCode='';
-        readCountEl.textContent='';
-      }
+      if(matchCount>0){matchCount=0;lastCode='';readCountEl.textContent=''}
     }
   }catch(e){}
 }
 
 function onCodeRead(code){
-  if(code===lastCode){
-    matchCount++;
-  }else{
-    lastCode=code;
-    matchCount=1;
-  }
+  if(code===lastCode){matchCount++}
+  else{lastCode=code;matchCount=1}
 
   readCountEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
 
-  if(matchCount>=CONFIRM_COUNT){
-    onScanConfirmed(code);
-  }
+  if(matchCount>=CONFIRM_COUNT)onScanConfirmed(code);
 }
 
-/* ══ 3. 확정 ══ */
+/* ══ 확정 ══ */
 
 function onScanConfirmed(code){
   if(scanned)return;
   scanned=true;
-
   if(scanTimer){clearInterval(scanTimer);scanTimer=null}
   if(navigator.vibrate)navigator.vibrate(150);
 
@@ -259,18 +233,16 @@ function onScanConfirmed(code){
   if(returnUrl){
     var url=decodeURIComponent(returnUrl);
     var sep=url.indexOf('?')>=0?'&':'?';
-    setTimeout(function(){
-      window.location.href=url+sep+'code='+encodeURIComponent(code);
-    },800);
+    setTimeout(function(){window.location.href=url+sep+'code='+encodeURIComponent(code)},800);
   }
 }
 
-/* ══ 4. 카메라 제어 ══ */
+/* ══ 조명 ══ */
 
 function toggleTorch(){
   if(!videoTrack)return;
   try{
-    var caps=videoTrack.getCapabilities()||{};
+    var caps=videoTrack.getCapabilities?videoTrack.getCapabilities():{};
     if(!caps.torch){
       var btn=document.getElementById('btnTorch');
       btn.textContent='🔦 미지원';
@@ -283,18 +255,6 @@ function toggleTorch(){
     }).catch(function(){torchOn=false});
   }catch(e){}
 }
-
-/* 탭 → 초점 리셋 */
-videoWrap.addEventListener('click',function(){
-  if(!videoTrack)return;
-  try{
-    /* manual로 전환 후 바로 continuous로 복귀 → 카메라가 재초점 시도 */
-    videoTrack.applyConstraints({advanced:[{focusMode:'manual'}]})
-    .then(function(){return new Promise(function(r){setTimeout(r,200)})})
-    .then(function(){return videoTrack.applyConstraints({advanced:[{focusMode:'continuous'}]})})
-    .catch(function(){});
-  }catch(e){}
-});
 
 function stopCamera(){
   if(scanTimer){clearInterval(scanTimer);scanTimer=null}
