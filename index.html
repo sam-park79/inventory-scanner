@@ -22,13 +22,20 @@
       font-size:15px;line-height:1.5;overflow-x:hidden;
       padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 
-    /* ── 메인 레이아웃 ── */
     .app{display:flex;flex-direction:column;height:100dvh;height:100vh;max-width:520px;margin:0 auto}
     .header{padding:16px 16px 12px;background:var(--bg);position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border)}
+    .header-row{display:flex;justify-content:space-between;align-items:center}
     .header h1{font-size:20px;font-weight:700;letter-spacing:-.3px}
+    .btn-refresh{background:var(--surface);border:1px solid var(--border);color:var(--text2);
+      height:30px;padding:0 10px;border-radius:8px;font-size:11px;font-family:var(--font);cursor:pointer;
+      display:inline-flex;align-items:center;gap:3px}
+    .btn-refresh:active{background:var(--card)}
     .header p{font-size:12px;color:var(--text2);margin-top:2px}
+    .data-status{font-size:11px;color:var(--green);margin-top:2px}
+    .data-status.loading-state{color:var(--accent)}
+    .data-status.error-state{color:var(--red)}
 
-    .search-wrap{padding:12px 16px 8px;position:sticky;top:72px;z-index:9;background:var(--bg)}
+    .search-wrap{padding:12px 16px 8px;position:sticky;top:90px;z-index:9;background:var(--bg)}
     .search-box{display:flex;gap:6px}
     .search-box input[type="search"]{flex:1;min-width:0;height:46px;padding:0 14px;
       border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);
@@ -65,9 +72,6 @@
     .empty-title{font-size:16px;font-weight:600;margin-bottom:6px}
     .empty-desc{font-size:13px;color:var(--text2)}
 
-    .loading{display:none;justify-content:center;padding:40px}
-    .loading.show{display:flex}
-    .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite}
     .error-msg{margin:12px 16px;padding:12px 16px;background:rgba(248,113,113,.1);
       border:1px solid rgba(248,113,113,.25);border-radius:var(--radius);font-size:13px;color:var(--red);display:none}
 
@@ -95,7 +99,6 @@
       opacity:.7;animation:scanAnim 2s ease-in-out infinite alternate}
     @keyframes scanAnim{0%{top:15%}100%{top:85%}}
 
-    /* iOS QuaggaJS */
     #iosScanner{flex:1;background:#000;display:none;position:relative;overflow:hidden}
     #iosScanner video,#iosScanner canvas{width:100%!important;height:100%!important;
       -o-object-fit:cover;object-fit:cover;position:absolute;top:0;left:0}
@@ -114,23 +117,25 @@
 </head>
 <body>
 
-<!-- ══ 메인 화면 ══ -->
 <div class="app">
   <div class="header">
-    <h1>📦 재고 위치 조회</h1>
+    <div class="header-row">
+      <h1>📦 재고 위치 조회</h1>
+      <button class="btn-refresh" onclick="loadData()">🔄 새로고침</button>
+    </div>
     <p>품목코드 또는 품목명 입력 · 바코드 스캔</p>
+    <div class="data-status" id="dataStatus">데이터 로딩 중...</div>
   </div>
   <div class="search-wrap">
     <div class="search-box">
       <input id="q" type="search" placeholder="품목코드 / 품목명" enterkeyhint="search"
              autocomplete="off" autocorrect="off" autocapitalize="off">
       <button class="btn btn-scan" onclick="openScanner()">📷</button>
-      <button class="btn btn-primary" id="btnSearch" onclick="doSearch()">검색</button>
+      <button class="btn btn-primary" onclick="doSearch()">검색</button>
     </div>
   </div>
   <div class="error-msg" id="error"></div>
   <div class="status" id="status"></div>
-  <div class="loading" id="loading"><div class="spinner"></div></div>
   <div class="results" id="results">
     <div class="empty">
       <div class="empty-icon">🔍</div>
@@ -140,7 +145,7 @@
   </div>
 </div>
 
-<!-- ══ 스캐너 오버레이 ══ -->
+<!-- 스캐너 오버레이 -->
 <div class="scanner-overlay" id="scannerOverlay">
   <div class="sc-top">
     <h2>📷 바코드 스캔</h2>
@@ -150,10 +155,8 @@
       <button class="sc-btn" onclick="closeScanner()">닫기</button>
     </div>
   </div>
-  <!-- Android -->
   <div class="sc-camera" id="androidCam"><video id="scanVideo" autoplay playsinline muted></video></div>
   <div class="sc-guide-wrap" id="scanGuide"><div class="sc-guide"><div class="sc-guide-line"></div></div></div>
-  <!-- iOS -->
   <div id="iosScanner"></div>
   <div class="sc-bottom">
     <div class="sc-hint">바코드를 카메라에 비춰주세요</div>
@@ -166,48 +169,106 @@
 
 <script>
 /* ══════════════════════════════════════
-   설정 — GAS API URL을 여기에 입력
+   설정
    ══════════════════════════════════════ */
 var API_URL='https://script.google.com/macros/s/AKfycbzrVSkWebWfBtld-HDNrLM66ndMfDvbVwLm5ROTLOJk5oBL9P9HfLlnsHentsXexSMG/exec';
 
-/* ══ 요소 참조 ══ */
 var qEl=document.getElementById('q');
-var btnSearch=document.getElementById('btnSearch');
 var resultsEl=document.getElementById('results');
 var statusEl=document.getElementById('status');
-var loadingEl=document.getElementById('loading');
 var errorEl=document.getElementById('error');
-var scannerOverlay=document.getElementById('scannerOverlay');
+var dataStatusEl=document.getElementById('dataStatus');
 var scReadEl=document.getElementById('scRead');
 var scCamInfoEl=document.getElementById('scCamInfo');
 
 var useNative='BarcodeDetector' in window;
 var CONFIRM_COUNT=3;
-var scanned=false,lastCode='',matchCount=0,torchOn=false;
-var activeTrack=null;
+var MAX_RESULTS=50;
+
+/* ══════════════════════════════════════
+   데이터 프리로드 + 로컬 검색
+   ══════════════════════════════════════ */
+
+var inventory=null;  /* 전체 데이터 (메모리) */
+var dataLoading=false;
+
+/** 페이지 로드 시 전체 데이터 다운로드 */
+function loadData(){
+  if(dataLoading)return;
+  dataLoading=true;
+  dataStatusEl.textContent='데이터 로딩 중...';
+  dataStatusEl.className='data-status loading-state';
+
+  fetch(API_URL+'?action=load')
+  .then(function(r){return r.json()})
+  .then(function(res){
+    dataLoading=false;
+    if(!res.success){
+      dataStatusEl.textContent='로드 실패: '+res.error;
+      dataStatusEl.className='data-status error-state';
+      return;
+    }
+    inventory=res.data;
+    var now=new Date();
+    var timeStr=now.getHours()+':'+String(now.getMinutes()).replace(/^(\d)$/,'0$1');
+    dataStatusEl.textContent='✓ '+res.count+'건 로드 완료 ('+timeStr+')';
+    dataStatusEl.className='data-status';
+  })
+  .catch(function(err){
+    dataLoading=false;
+    dataStatusEl.textContent='서버 연결 실패';
+    dataStatusEl.className='data-status error-state';
+  });
+}
+
+/* 페이지 로드 시 자동 실행 */
+loadData();
 
 qEl.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();doSearch()}});
 
-/* ══════════════════════════════════════
-   검색 (fetch → GAS API)
-   ══════════════════════════════════════ */
-
+/** 로컬 검색 (메모리에서 즉시) */
 function doSearch(){
   var q=qEl.value.trim();if(!q){qEl.focus();return}
   errorEl.style.display='none';statusEl.textContent='';
-  resultsEl.innerHTML='';loadingEl.classList.add('show');btnSearch.disabled=true;
 
-  fetch(API_URL+'?q='+encodeURIComponent(q))
-  .then(function(r){return r.json()})
-  .then(function(res){
-    loadingEl.classList.remove('show');btnSearch.disabled=false;
-    if(!res.success){showError(res.error);return}
-    renderResults(res.data||[]);
-  })
-  .catch(function(err){
-    loadingEl.classList.remove('show');btnSearch.disabled=false;
-    showError('서버 연결 실패: '+err.message);
-  });
+  if(!inventory){
+    showError('데이터 로딩 중입니다. 잠시 후 다시 시도해 주세요.');
+    return;
+  }
+
+  var qLower=q.toLowerCase();
+  var isBarcode=/^[A-Za-z0-9]{10,}$/.test(q);
+  var results=[];
+
+  for(var r=0;r<inventory.length;r++){
+    var rec=inventory[r];
+    var codeLower=rec.c.toLowerCase(),nameLower=rec.m.toLowerCase();
+
+    if(isBarcode){if(codeLower!==qLower)continue}
+    else{if(codeLower.indexOf(qLower)<0&&nameLower.indexOf(qLower)<0)continue}
+
+    var totalQty=0,locs=[];
+    for(var j=0;j<rec.l.length;j++){totalQty+=rec.l[j].q;locs.push({name:rec.l[j].n,qty:rec.l[j].q})}
+
+    results.push({itemCode:rec.c,brand:rec.b,itemName:rec.m,itemDesc:rec.d,
+      color:rec.r,size:rec.s,locations:locs,totalQty:totalQty});
+    if(results.length>=MAX_RESULTS)break;
+  }
+
+  /* 바코드 정확 일치 실패 시 부분 일치 재검색 */
+  if(isBarcode&&results.length===0){
+    for(var r2=0;r2<inventory.length;r2++){
+      var rec2=inventory[r2];
+      if(rec2.c.toLowerCase().indexOf(qLower)<0&&rec2.m.toLowerCase().indexOf(qLower)<0)continue;
+      var tq2=0,lo2=[];
+      for(var j2=0;j2<rec2.l.length;j2++){tq2+=rec2.l[j2].q;lo2.push({name:rec2.l[j2].n,qty:rec2.l[j2].q})}
+      results.push({itemCode:rec2.c,brand:rec2.b,itemName:rec2.m,itemDesc:rec2.d,
+        color:rec2.r,size:rec2.s,locations:lo2,totalQty:tq2});
+      if(results.length>=MAX_RESULTS)break;
+    }
+  }
+
+  renderResults(results);
 }
 
 function renderResults(data){
@@ -265,37 +326,33 @@ function playBeep(){
 }
 
 function confirmFeedback(){
-  /* 진동 (Android만 동작, iOS 미지원) */
   if(window.navigator&&typeof window.navigator.vibrate==='function'){
     try{window.navigator.vibrate(400)}catch(e){}
   }
-  /* 비프음 (항상 재생 — 진동모드에서는 미디어볼륨 0이라 자연스럽게 안 들림) */
   playBeep();
 }
 
 /* ══════════════════════════════════════
-   스캐너 — 오버레이 방식 (같은 페이지)
+   스캐너
    ══════════════════════════════════════ */
 var allCameras=[],currentCamIndex=0;
 var scanVideo,cropCanvas,cropCtx,nativeDetector,scanTimer;
-var iosQuagga=false;
+var scanned=false,lastCode='',matchCount=0,torchOn=false,activeTrack=null;
 
 function openScanner(){
   scanned=false;lastCode='';matchCount=0;torchOn=false;
   scReadEl.textContent='';scCamInfoEl.textContent='';
   document.getElementById('btnTorch').classList.remove('active');
-  scannerOverlay.classList.add('show');
-
+  document.getElementById('scannerOverlay').classList.add('show');
   if(useNative)initAndroidScanner();else initIOSScanner();
 }
 
 function closeScanner(){
-  scannerOverlay.classList.remove('show');
+  document.getElementById('scannerOverlay').classList.remove('show');
   if(useNative)stopAndroid();
-  else{try{Quagga.stop()}catch(e){} iosQuagga=false;}
+  else{try{Quagga.stop()}catch(e){}}
 }
 
-/* ── 카메라 목록 ── */
 function discoverCameras(){
   return navigator.mediaDevices.enumerateDevices().then(function(devs){
     allCameras=devs.filter(function(d){
@@ -329,7 +386,6 @@ function toggleTorch(){
       document.getElementById('btnTorch').classList.toggle('active',torchOn)}).catch(function(){torchOn=false})}catch(e){}
 }
 
-/* ── 스캔 결과 (공통) ── */
 function onCodeRead(code){
   if(scanned)return;
   if(code===lastCode)matchCount++;else{lastCode=code;matchCount=1}
@@ -345,41 +401,30 @@ function onScanConfirmed(code){
   doSearch();
 }
 
-/* ══ Android: BarcodeDetector ══ */
-
+/* ── Android: BarcodeDetector ── */
 function initAndroidScanner(){
   document.getElementById('iosScanner').style.display='none';
   document.getElementById('androidCam').style.display='flex';
   document.getElementById('scanGuide').style.display='flex';
-
   scanVideo=document.getElementById('scanVideo');
   cropCanvas=document.getElementById('cropCanvas');
   cropCtx=cropCanvas.getContext('2d');
   if(!nativeDetector)nativeDetector=new BarcodeDetector({
     formats:['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','code_93','codabar','qr_code']});
 
-  /* 저장된 카메라가 있으면 바로 사용, 없으면 facingMode */
   var savedId='';try{savedId=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
   var constraints=savedId
     ?{video:{deviceId:{exact:savedId}},audio:false}
     :{video:{facingMode:'environment'},audio:false};
 
   navigator.mediaDevices.getUserMedia(constraints)
-  .catch(function(){
-    /* 저장된 카메라 실패 시 기본 후면으로 재시도 */
-    return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
-  })
+  .catch(function(){return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})})
   .then(function(stream){
     scanVideo.srcObject=stream;activeTrack=stream.getVideoTracks()[0];
     var s=activeTrack.getSettings?activeTrack.getSettings():{};
     scCamInfoEl.textContent=(activeTrack.label||'카메라')+' ('+(s.width||'?')+'x'+(s.height||'?')+')';
     return scanVideo.play();
-  })
-  .then(function(){
-    /* 스캔 즉시 시작 — 카메라 목록은 백그라운드에서 수집 */
-    startAndroidScan();
-    return discoverCameras();
-  })
+  }).then(function(){startAndroidScan();return discoverCameras()})
   .catch(function(){scCamInfoEl.textContent='카메라 권한을 확인해 주세요'});
 }
 
@@ -417,12 +462,10 @@ function stopAndroid(){
   activeTrack=null;
 }
 
-/* ══ iOS: QuaggaJS ══ */
-
+/* ── iOS: QuaggaJS ── */
 function initIOSScanner(){
   document.getElementById('androidCam').style.display='none';
   document.getElementById('iosScanner').style.display='block';
-
   Quagga.init({
     inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
       constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
@@ -430,34 +473,29 @@ function initIOSScanner(){
       'upc_reader','upc_e_reader','i2of5_reader','codabar_reader']},
     locate:true,frequency:10
   },function(err){
-    if(err){scCamInfoEl.textContent='카메라 시작 실패: '+err;return}
-    Quagga.start();iosQuagga=true;
-    scCamInfoEl.textContent='iOS — QuaggaJS';
+    if(err){scCamInfoEl.textContent='카메라 시작 실패';return}
+    Quagga.start();scCamInfoEl.textContent='iOS — QuaggaJS';
     try{var v=document.querySelector('#iosScanner video');
       if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
     discoverCameras();
   });
-
   Quagga.onDetected(function(result){
-    if(scanned)return;
-    var code=result.codeResult.code;
-    if(code)onCodeRead(code);
+    if(scanned)return;var code=result.codeResult.code;if(code)onCodeRead(code);
   });
 }
 
 function restartQuagga(idx){
-  try{Quagga.stop()}catch(e){}iosQuagga=false;
+  try{Quagga.stop()}catch(e){}
   var cam=allCameras[idx];
   var constraints=cam?{deviceId:{exact:cam.deviceId}}:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
   setTimeout(function(){
     Quagga.init({
       inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),constraints:constraints},
       decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader',
-        'upc_reader','upc_e_reader','i2of5_reader','codabar_reader']},
-      locate:true,frequency:10
+        'upc_reader','upc_e_reader','i2of5_reader','codabar_reader']},locate:true,frequency:10
     },function(err){
       if(err){scCamInfoEl.textContent='전환 실패';return}
-      Quagga.start();iosQuagga=true;activeTrack=null;
+      Quagga.start();activeTrack=null;
       try{var v=document.querySelector('#iosScanner video');
         if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
           scCamInfoEl.textContent=activeTrack.label||'카메라 '+(idx+1)}}catch(e){}
