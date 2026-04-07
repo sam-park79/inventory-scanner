@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>바코드 스캔</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    :root{
+      --bg:#0f1117;--surface:#1a1d27;--card:#222633;--border:#2e3345;
+      --text:#e8eaf0;--text2:#9ba1b5;--accent:#4f8cff;--green:#34d399;--red:#f87171;
+      --font:'Noto Sans KR',system-ui,-apple-system,sans-serif;
+    }
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px}
+
+    .wrap{display:flex;flex-direction:column;height:100dvh;max-width:520px;margin:0 auto}
+
+    .top{display:flex;justify-content:space-between;align-items:center;
+      padding:14px 20px;border-bottom:1px solid var(--border)}
+    .top h1{font-size:18px;font-weight:700}
+    .btn-back{background:var(--card);border:1px solid var(--border);color:var(--text);
+      height:38px;padding:0 16px;border-radius:10px;font-size:14px;font-weight:500;
+      font-family:var(--font);cursor:pointer;text-decoration:none;
+      display:inline-flex;align-items:center}
+
+    .camera{flex:1;display:flex;flex-direction:column;align-items:center;
+      justify-content:center;padding:12px;overflow:hidden}
+    #reader{width:100%;max-width:460px;border-radius:14px;overflow:hidden}
+
+    .hint{text-align:center;padding:12px 20px;font-size:13px;color:var(--text2);line-height:1.5}
+
+    /* 스캔 성공 오버레이 */
+    .success-overlay{position:fixed;inset:0;background:rgba(15,17,23,.95);
+      display:none;flex-direction:column;align-items:center;justify-content:center;
+      z-index:100;padding:40px 20px;text-align:center}
+    .success-overlay.show{display:flex}
+    .success-icon{font-size:64px;margin-bottom:20px}
+    .success-code{font-size:22px;font-weight:700;color:var(--green);
+      background:rgba(52,211,153,.1);padding:12px 24px;border-radius:14px;
+      border:1px solid rgba(52,211,153,.25);margin-bottom:12px;word-break:break-all}
+    .success-msg{font-size:14px;color:var(--text2);margin-bottom:24px}
+    .success-spinner{width:24px;height:24px;border:3px solid var(--border);
+      border-top-color:var(--green);border-radius:50%;animation:sp .7s linear infinite;
+      margin-bottom:8px}
+    @keyframes sp{to{transform:rotate(360deg)}}
+
+    /* 에러 */
+    .err-bar{margin:8px 20px;padding:12px 16px;background:rgba(248,113,113,.1);
+      border:1px solid rgba(248,113,113,.2);border-radius:12px;font-size:13px;
+      color:var(--red);display:none;text-align:center}
+    .err-bar.show{display:block}
+
+    /* html5-qrcode 오버라이드 */
+    #reader img[alt="Info icon"]{display:none!important}
+    #html5-qrcode-anchor-scan-type-change{display:none!important}
+    #html5-qrcode-button-camera-permission{
+      background:var(--accent)!important;color:#fff!important;border:none!important;
+      border-radius:12px!important;padding:12px 24px!important;font-size:15px!important;
+      font-family:var(--font)!important;cursor:pointer!important}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <h1>📷 바코드 스캔</h1>
+      <a class="btn-back" id="btnBack" href="#">돌아가기</a>
+    </div>
+
+    <div class="camera"><div id="reader"></div></div>
+    <div class="hint" id="hint">바코드를 카메라에 비춰주세요<br>자동으로 인식됩니다</div>
+    <div class="err-bar" id="errBar"></div>
+  </div>
+
+  <!-- 스캔 성공 오버레이 -->
+  <div class="success-overlay" id="successOverlay">
+    <div class="success-icon">✅</div>
+    <div class="success-code" id="successCode"></div>
+    <div class="success-msg">재고 조회 화면으로 이동합니다...</div>
+    <div class="success-spinner"></div>
+  </div>
+
+<script>
+/* ── URL 파라미터 파싱 ── */
+var params=new URLSearchParams(window.location.search);
+var returnUrl=params.get('returnUrl')||'';
+
+/* 돌아가기 버튼 */
+var btnBack=document.getElementById('btnBack');
+if(returnUrl){
+  btnBack.href=returnUrl;
+}else{
+  btnBack.style.display='none';
+}
+
+/* ── 스캐너 시작 ── */
+var scanner=new Html5Qrcode('reader');
+var scanned=false;
+
+scanner.start(
+  {facingMode:'environment'},
+  {
+    fps:15,
+    qrbox:function(vw){
+      var w=Math.min(vw*0.9,400);
+      return{width:Math.floor(w),height:Math.floor(w*0.4)};
+    },
+    formatsToSupport:[
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39,
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.ITF,
+      Html5QrcodeSupportedFormats.CODE_93
+    ]
+  },
+  onScanSuccess,
+  function(){}
+).catch(function(err){
+  var el=document.getElementById('errBar');
+  el.textContent='카메라를 사용할 수 없습니다: '+err;
+  el.classList.add('show');
+  document.getElementById('hint').textContent='브라우저 설정에서 카메라 권한을 허용해 주세요';
+});
+
+function onScanSuccess(code){
+  if(scanned)return;
+  scanned=true;
+
+  if(navigator.vibrate)navigator.vibrate(120);
+
+  /* 스캐너 정지 */
+  try{scanner.stop()}catch(e){}
+
+  /* 성공 표시 */
+  document.getElementById('successCode').textContent=code;
+  document.getElementById('successOverlay').classList.add('show');
+
+  /* GAS 웹앱으로 리다이렉트 (code 파라미터 전달) */
+  if(returnUrl){
+    var sep=returnUrl.indexOf('?')>=0?'&':'?';
+    var target=returnUrl+sep+'code='+encodeURIComponent(code);
+    setTimeout(function(){window.location.href=target},800);
+  }
+}
+</script>
+</body>
+</html>
