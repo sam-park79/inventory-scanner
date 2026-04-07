@@ -9,7 +9,8 @@
   <title>바코드 스캔</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <!-- iOS: QuaggaJS (1D 바코드 전용, iOS Safari 호환) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     :root{--bg:#0f1117;--border:#2e3345;--text:#e8eaf0;--text2:#9ba1b5;--green:#34d399;--accent:#4f8cff;
@@ -30,6 +31,8 @@
     .btn-t.active{background:rgba(251,191,36,.9);color:#000;border-color:transparent}
     .btn-t.switch{background:rgba(79,140,255,.2);border-color:rgba(79,140,255,.3)}
     a.btn-t{text-decoration:none}
+
+    /* Android 카메라 */
     .video-wrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;
       background:#000;overflow:hidden}
     #video{width:100%;height:100%;-o-object-fit:cover;object-fit:cover}
@@ -40,17 +43,20 @@
     .scan-line{position:absolute;left:8%;right:8%;height:2px;background:var(--green);border-radius:2px;
       opacity:.7;animation:scanAnim 2s ease-in-out infinite alternate}
     @keyframes scanAnim{0%{top:15%}100%{top:85%}}
-    #iosReader{flex:1;background:#000;display:none}
-    #iosReader video{-o-object-fit:cover!important;object-fit:cover!important}
-    #iosReader img[alt="Info icon"]{display:none!important}
-    #html5-qrcode-anchor-scan-type-change{display:none!important}
+
+    /* iOS: QuaggaJS 카메라 영역 */
+    #iosReader{flex:1;background:#000;display:none;position:relative;overflow:hidden}
+    #iosReader video,#iosReader canvas{width:100%!important;height:100%!important;
+      -o-object-fit:cover;object-fit:cover;position:absolute;top:0;left:0}
+    #iosReader canvas.drawingBuffer{display:none!important}
+
     .bottom-bar{position:fixed;bottom:0;left:0;right:0;z-index:20;
       background:rgba(15,17,23,.85);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
       padding:10px 16px;padding-bottom:max(10px,env(safe-area-inset-bottom));text-align:center}
     .hint{font-size:13px;color:var(--text2)}
     .read-count{font-size:12px;color:var(--green);margin-top:3px;min-height:17px;font-weight:600}
     .cam-info{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px}
-    .debug{font-size:9px;color:rgba(255,100,100,.5);margin-top:2px;max-height:40px;overflow:hidden}
+
     .ok-overlay{position:fixed;inset:0;background:rgba(15,17,23,.95);
       display:none;flex-direction:column;align-items:center;justify-content:center;
       z-index:100;padding:40px 20px;text-align:center}
@@ -88,7 +94,6 @@
       <div class="hint">바코드를 카메라에 비춰주세요</div>
       <div class="read-count" id="readCount"></div>
       <div class="cam-info" id="camInfo"></div>
-      <div class="debug" id="debug"></div>
     </div>
   </div>
   <div class="ok-overlay" id="okOverlay">
@@ -110,73 +115,52 @@ document.getElementById('btnBackErr').href=returnUrl?decodeURIComponent(returnUr
 
 var readCountEl=document.getElementById('readCount');
 var camInfoEl=document.getElementById('camInfo');
-var debugEl=document.getElementById('debug');
 var scanned=false,lastCode='',matchCount=0,torchOn=false;
 var activeTrack=null;
 var useNative='BarcodeDetector' in window;
 
-function dbg(msg){debugEl.textContent=msg;console.log('[SCAN]',msg)}
-
 /* ══════════════════════════════════════
-   피드백 — 확정 시에만
+   피드백 (확정 시에만)
    ══════════════════════════════════════ */
-
-/* AudioContext를 페이지 로드 시 즉시 생성 */
 var audioCtx;
 try{audioCtx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}
-
-/* 사용자 제스처 시 AudioContext unlock (iOS/Android 공통) */
-function unlockAudio(){
-  if(audioCtx&&audioCtx.state==='suspended'){
-    audioCtx.resume().catch(function(){});
-  }
-}
+function unlockAudio(){if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(function(){})}
 document.addEventListener('touchstart',unlockAudio,{passive:true});
 document.addEventListener('click',unlockAudio,{passive:true});
 
-function playBeep(){
+function confirmFeedback(){
+  /* 진동 — 단순하고 길게 */
+  if(window.navigator&&window.navigator.vibrate){
+    window.navigator.vibrate(400);
+  }
+
+  /* 비프음 */
   if(!audioCtx)return;
   unlockAudio();
-
-  /* 짧은 딜레이 후 재생 (resume 완료 대기) */
   setTimeout(function(){
     try{
-      var now=audioCtx.currentTime;
+      var t=audioCtx.currentTime;
+      var o=audioCtx.createOscillator();
+      var g=audioCtx.createGain();
+      o.type='square';o.frequency.value=1200;
+      g.gain.value=1.0;
+      o.connect(g);g.connect(audioCtx.destination);
+      o.start(t);o.stop(t+0.15);
 
-      var osc1=audioCtx.createOscillator();
-      var g1=audioCtx.createGain();
-      osc1.type='square';
-      osc1.frequency.value=1000;
-      g1.gain.value=1.0;
-      osc1.connect(g1);g1.connect(audioCtx.destination);
-      osc1.start(now);osc1.stop(now+0.12);
-
-      var osc2=audioCtx.createOscillator();
+      var o2=audioCtx.createOscillator();
       var g2=audioCtx.createGain();
-      osc2.type='square';
-      osc2.frequency.value=1500;
+      o2.type='square';o2.frequency.value=1600;
       g2.gain.value=1.0;
-      osc2.connect(g2);g2.connect(audioCtx.destination);
-      osc2.start(now+0.15);osc2.stop(now+0.3);
-    }catch(e){dbg('beep err: '+e)}
-  },50);
-}
-
-function doVibrate(){
-  if(navigator.vibrate){
-    navigator.vibrate([150,80,150]);
-  }
-}
-
-function confirmFeedback(){
-  doVibrate();
-  playBeep();
+      o2.connect(g2);g2.connect(audioCtx.destination);
+      o2.start(t+0.18);o2.stop(t+0.35);
+    }catch(e){}
+  },30);
 }
 
 /* ══ 공통: 카메라 목록 ══ */
 var allCameras=[],currentCamIndex=0;
 
-function discoverCamerasOnly(){
+function discoverCamerasFromStream(){
   return navigator.mediaDevices.enumerateDevices().then(function(devs){
     allCameras=devs.filter(function(d){
       if(d.kind!=='videoinput')return false;
@@ -184,7 +168,6 @@ function discoverCamerasOnly(){
       return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0;
     });
     if(!allCameras.length)allCameras=devs.filter(function(d){return d.kind==='videoinput'});
-    dbg('카메라 '+allCameras.length+'대: '+allCameras.map(function(c){return c.label||c.deviceId}).join(', '));
     var s='';try{s=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
     if(s){for(var i=0;i<allCameras.length;i++){if(allCameras[i].deviceId===s){currentCamIndex=i;break}}}
     if(allCameras.length>0)document.getElementById('btnSwitch').textContent='🔄 전환 ('+allCameras.length+'대)';
@@ -196,7 +179,7 @@ function switchCamera(){
   currentCamIndex=(currentCamIndex+1)%allCameras.length;
   resetMatch();torchOn=false;document.getElementById('btnTorch').classList.remove('active');
   camInfoEl.textContent='전환 중... ('+(currentCamIndex+1)+'/'+allCameras.length+')';
-  if(useNative)startAndroidCam(currentCamIndex);else restartIOSCam(currentCamIndex);
+  if(useNative)startAndroidCam(currentCamIndex);else restartQuagga(currentCamIndex);
 }
 
 function toggleTorch(){
@@ -227,11 +210,11 @@ function resetMatch(){matchCount=0;lastCode='';readCountEl.textContent=''}
 function onScanConfirmed(code){
   if(scanned)return;scanned=true;
 
-  /* 피드백 먼저 실행 */
+  /* 피드백 먼저 */
   confirmFeedback();
 
   /* 스캔 중지 */
-  if(useNative)stopAndroid();else{try{iosScanner.stop()}catch(e){}}
+  if(useNative)stopAndroid();else{try{Quagga.stop()}catch(e){}}
 
   document.getElementById('okCode').textContent=code;
   document.getElementById('okOverlay').classList.add('show');
@@ -243,7 +226,7 @@ function onScanConfirmed(code){
 }
 
 /* ══════════════════════════════════════
-   Android: 커스텀 카메라 + BarcodeDetector
+   Android: BarcodeDetector
    ══════════════════════════════════════ */
 var video,cropCanvas,cropCtx,nativeDetector,scanTimer;
 
@@ -255,28 +238,17 @@ function initAndroid(){
   nativeDetector=new BarcodeDetector({
     formats:['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','code_93','codabar','qr_code']
   });
-
-  /* 먼저 카메라 시작 → 이후 목록 수집 */
   navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})
   .then(function(stream){
     video.srcObject=stream;activeTrack=stream.getVideoTracks()[0];
     camInfoEl.textContent=activeTrack.label||'카메라';
     return video.play();
-  })
-  .then(function(){
-    /* 카메라 목록 수집 (label 접근 위해 스트림 활성 상태에서) */
-    return discoverCamerasOnly();
-  })
-  .then(function(){
-    /* 저장된 카메라가 현재와 다르면 전환 */
-    if(allCameras.length>0&&currentCamIndex>0){
-      startAndroidCam(currentCamIndex);
-    }else{
-      /* 현재 카메라 유지, 스캔 시작 */
-      startAndroidScan();
-    }
-  })
-  .catch(function(err){showError('카메라 권한을 확인해 주세요.<br>'+err)});
+  }).then(function(){
+    return discoverCamerasFromStream();
+  }).then(function(){
+    if(allCameras.length>0&&currentCamIndex>0)startAndroidCam(currentCamIndex);
+    else startAndroidScan();
+  }).catch(function(err){showError('카메라 권한을 확인해 주세요.')});
 }
 
 function startAndroidCam(idx){
@@ -313,98 +285,106 @@ function stopAndroid(){
 }
 
 /* ══════════════════════════════════════
-   iOS: html5-qrcode
-   - 즉시 facingMode로 시작 (사전 카메라 탐색 안 함)
-   - qrbox 없음 (전체 프레임 스캔)
-   - 시작 후 카메라 목록 수집
+   iOS: QuaggaJS (1D 바코드 전용, iOS Safari 검증됨)
+   카메라 + 바코드 디코딩을 QuaggaJS가 직접 처리
    ══════════════════════════════════════ */
-var iosScanner=null,iosRunning=false;
 
 function initIOS(){
   document.getElementById('androidArea').style.display='none';
   document.getElementById('scanOverlay').style.display='none';
   document.getElementById('iosReader').style.display='block';
 
-  iosScanner=new Html5Qrcode('iosReader');
-  dbg('iOS: html5-qrcode 시작...');
+  camInfoEl.textContent='카메라 시작 중...';
 
-  /* facingMode로 즉시 시작 — 사전 getUserMedia 없음 */
-  iosScanner.start(
-    {facingMode:'environment'},
-    {fps:15},
-    function onSuccess(decoded,result){
-      dbg('읽힘: '+decoded);
-      onCodeRead(decoded);
+  Quagga.init({
+    inputStream:{
+      type:'LiveStream',
+      target:document.getElementById('iosReader'),
+      constraints:{
+        facingMode:'environment',
+        width:{ideal:1280},
+        height:{ideal:720}
+      }
     },
-    function onErr(msg){
-      /* 프레임별 에러 — 무시 (바코드 없는 프레임) */
+    decoder:{
+      readers:[
+        'ean_reader',
+        'ean_8_reader',
+        'code_128_reader',
+        'code_39_reader',
+        'upc_reader',
+        'upc_e_reader',
+        'i2of5_reader',
+        'codabar_reader'
+      ]
+    },
+    locate:true,
+    frequency:10
+  },function(err){
+    if(err){
+      showError('카메라를 시작할 수 없습니다.<br>'+err);
+      return;
     }
-  ).then(function(){
-    iosRunning=true;
-    dbg('iOS: 스캐너 시작됨');
+    Quagga.start();
+    camInfoEl.textContent='iOS — QuaggaJS 스캔 활성';
 
-    /* 카메라 트랙 참조 */
-    try{var v=document.querySelector('#iosReader video');
-      if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
-        var s=activeTrack.getSettings?activeTrack.getSettings():{};
-        camInfoEl.textContent=(activeTrack.label||'후면 카메라')+' ('+(s.width||'?')+'x'+(s.height||'?')+')'}}catch(e){}
+    /* 카메라 트랙 참조 (조명용) */
+    try{
+      var v=document.querySelector('#iosReader video');
+      if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0];
+    }catch(e){}
 
-    /* 스캐너 실행 중에 카메라 목록 수집 */
-    return discoverCamerasOnly();
-  }).catch(function(err){
-    dbg('iOS 시작 실패: '+err);
-    showError('카메라를 시작할 수 없습니다.<br>'+err);
+    /* 카메라 목록 수집 */
+    discoverCamerasFromStream();
+  });
+
+  /* 바코드 인식 이벤트 */
+  Quagga.onDetected(function(result){
+    if(scanned)return;
+    var code=result.codeResult.code;
+    if(code)onCodeRead(code);
   });
 }
 
-function restartIOSCam(idx){
-  var cam=allCameras[idx];if(!cam)return;
+function restartQuagga(idx){
+  try{Quagga.stop()}catch(e){}
 
-  if(iosRunning){
-    iosScanner.stop().then(function(){
-      iosRunning=false;
-      setTimeout(function(){doStartIOS(cam.deviceId,idx)},300);
-    }).catch(function(){
-      iosRunning=false;
-      setTimeout(function(){doStartIOS(cam.deviceId,idx)},300);
+  var cam=allCameras[idx];
+  var constraints=cam
+    ?{deviceId:{exact:cam.deviceId}}
+    :{facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
+
+  setTimeout(function(){
+    Quagga.init({
+      inputStream:{
+        type:'LiveStream',
+        target:document.getElementById('iosReader'),
+        constraints:constraints
+      },
+      decoder:{
+        readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader',
+                 'upc_reader','upc_e_reader','i2of5_reader','codabar_reader']
+      },
+      locate:true,
+      frequency:10
+    },function(err){
+      if(err){camInfoEl.textContent='카메라 전환 실패';return}
+      Quagga.start();
+      activeTrack=null;
+      try{var v=document.querySelector('#iosReader video');
+        if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
+          camInfoEl.textContent=(activeTrack.label||'카메라 '+(idx+1))}}catch(e){}
+      try{if(cam)localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}
     });
-  }else{
-    doStartIOS(cam.deviceId,idx);
-  }
-}
-
-function doStartIOS(deviceId,idx){
-  iosScanner.start(
-    deviceId,
-    {fps:15},
-    function(decoded){dbg('읽힘: '+decoded);onCodeRead(decoded)},
-    function(){}
-  ).then(function(){
-    iosRunning=true;activeTrack=null;
-    try{var v=document.querySelector('#iosReader video');
-      if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
-        var s=activeTrack.getSettings?activeTrack.getSettings():{};
-        camInfoEl.textContent=(activeTrack.label||'카메라 '+(idx+1))+' ('+(s.width||'?')+'x'+(s.height||'?')+')'}}catch(e){}
-    try{localStorage.setItem('SCAN_CAM_ID',deviceId)}catch(e){}
-  }).catch(function(err){
-    dbg('전환 실패: '+err);
-    camInfoEl.textContent='전환 실패 — facingMode로 복구 중...';
-    /* 폴백: facingMode로 재시작 */
-    iosScanner.start({facingMode:'environment'},{fps:15},
-      function(d){onCodeRead(d)},function(){})
-    .then(function(){iosRunning=true;camInfoEl.textContent='기본 후면 카메라'})
-    .catch(function(e2){showError('카메라 복구 실패: '+e2)});
-  });
+  },300);
 }
 
 /* ══ 초기화 ══ */
-dbg('mode: '+(useNative?'Android (BarcodeDetector)':'iOS (html5-qrcode)'));
 if(useNative)initAndroid();else initIOS();
 
 function showError(msg){document.getElementById('errMsg').innerHTML=msg;document.getElementById('errFull').classList.add('show')}
 window.addEventListener('beforeunload',function(){
-  if(useNative)stopAndroid();
-  else if(iosRunning){try{iosScanner.stop()}catch(e){}}
+  if(useNative)stopAndroid();else{try{Quagga.stop()}catch(e){}}
 });
 </script>
 </body>
