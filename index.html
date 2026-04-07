@@ -199,7 +199,7 @@
   <div class="sc-top">
     <h2 id="scTitle">📷 바코드 스캔</h2>
     <div class="sc-btns">
-      <button class="sc-btn sw" id="btnSwitch" onclick="switchCamera()">🔄 전환</button>
+      <button class="sc-btn sw" id="btnSwitch" onclick="switchCamera()">🔄 카메라 전환</button>
       <button class="sc-btn" id="btnTorch" onclick="toggleTorch()">🔦</button>
       <button class="sc-btn" onclick="closeScanner()">닫기</button>
     </div>
@@ -234,9 +234,9 @@
 <!-- ══ 위치 입력 모달 ══ -->
 <div class="modal-bg" id="locModal">
   <div class="modal-box">
-    <h3>📍 이동 위치 입력</h3>
+    <h3>📍 상품 이동 위치 입력</h3>
     <p>상품을 이동할 창고 위치를 입력하세요</p>
-    <input type="text" id="locInput" placeholder="예: A3" autocomplete="off" autocapitalize="characters">
+    <input type="text" id="locInput" placeholder="예 : 창고 A1" autocomplete="off" autocapitalize="characters">
     <div class="modal-btns">
       <button class="modal-cancel" onclick="closeLocModal()">취소</button>
       <button class="modal-ok" onclick="executeMove()">이동 실행</button>
@@ -413,7 +413,7 @@ function discoverCameras(){
     if(!allCameras.length)allCameras=devs.filter(function(d){return d.kind==='videoinput'});
     var s='';try{s=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
     if(s){for(var i=0;i<allCameras.length;i++){if(allCameras[i].deviceId===s){currentCamIndex=i;break}}}
-    if(allCameras.length>0)document.getElementById('btnSwitch').textContent='🔄 전환 ('+allCameras.length+'대)';
+    if(allCameras.length>0)document.getElementById('btnSwitch').textContent='🔄 카메라 전환 ('+allCameras.length+'대)';
   });
 }
 
@@ -582,15 +582,21 @@ function executeMove(){
     document.getElementById('procOverlay').classList.remove('show');
     if(!res.success){alert('오류: '+(res.error||'알 수 없는 오류'));return}
 
+    /* 로컬 인벤토리 즉시 업데이트 (재로딩 없이 반영) */
+    if(inventory){
+      var movedCodes={};
+      for(var mi=0;mi<items.length;mi++)movedCodes[items[mi].code]=true;
+      for(var ri=0;ri<inventory.length;ri++){
+        if(movedCodes[inventory[ri].c])inventory[ri].p=location;
+      }
+    }
+
     alert('✅ 상품 이동 완료\n\n'+
       '• 위치: '+res.location+'\n'+
       '• 처리: '+res.updated+'건 업데이트\n'+
       '• 상품: '+res.itemCount+'종');
 
     document.getElementById('reviewOverlay').classList.remove('show');
-
-    /* 데이터 새로고침 */
-    loadData();
   })
   .catch(function(err){
     document.getElementById('procOverlay').classList.remove('show');
