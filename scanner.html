@@ -25,7 +25,7 @@
     .btn-t{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;
       height:34px;padding:0 10px;border-radius:10px;font-size:12px;font-weight:500;
       font-family:var(--font);cursor:pointer;display:inline-flex;align-items:center;gap:3px;
-      -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:background .2s;flex-shrink:0}
+      -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);flex-shrink:0}
     .btn-t:active{background:rgba(255,255,255,.2)}
     .btn-t.active{background:rgba(251,191,36,.9);color:#000;border-color:transparent}
     .btn-t.switch{background:rgba(79,140,255,.2);border-color:rgba(79,140,255,.3)}
@@ -38,7 +38,7 @@
     .scan-guide{position:relative;width:90%;max-width:440px;aspect-ratio:1.8/1;
       border:2.5px solid var(--green);border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.5)}
     .scan-line{position:absolute;left:8%;right:8%;height:2px;background:var(--green);border-radius:2px;
-      opacity:.7;-webkit-animation:scanAnim 2s ease-in-out infinite alternate;animation:scanAnim 2s ease-in-out infinite alternate}
+      opacity:.7;animation:scanAnim 2s ease-in-out infinite alternate}
     @keyframes scanAnim{0%{top:15%}100%{top:85%}}
     #iosReader{flex:1;background:#000;display:none}
     #iosReader video{-o-object-fit:cover!important;object-fit:cover!important}
@@ -47,7 +47,7 @@
     .bottom-bar{position:fixed;bottom:0;left:0;right:0;z-index:20;
       background:rgba(15,17,23,.85);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
       padding:10px 16px;padding-bottom:max(10px,env(safe-area-inset-bottom));text-align:center}
-    .hint{font-size:13px;color:var(--text2);line-height:1.4}
+    .hint{font-size:13px;color:var(--text2)}
     .read-count{font-size:12px;color:var(--green);margin-top:3px;min-height:17px;font-weight:600}
     .cam-info{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px}
     .ok-overlay{position:fixed;inset:0;background:rgba(15,17,23,.95);
@@ -59,7 +59,7 @@
       padding:12px 24px;border-radius:14px;border:1px solid rgba(52,211,153,.25);margin-bottom:12px;word-break:break-all}
     .ok-msg{font-size:14px;color:var(--text2);margin-bottom:24px}
     .ok-sp{width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--green);
-      border-radius:50%;-webkit-animation:sp .7s linear infinite;animation:sp .7s linear infinite}
+      border-radius:50%;animation:sp .7s linear infinite}
     @keyframes sp{to{transform:rotate(360deg)}}
     .err-full{position:fixed;inset:0;background:var(--bg);z-index:50;
       display:none;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center}
@@ -112,39 +112,51 @@ var scanned=false,lastCode='',matchCount=0,torchOn=false;
 var activeTrack=null;
 var useNative='BarcodeDetector' in window;
 
-/* ══ 피드백: 진동(Android) + 비프음(iOS/공통) ══ */
+/* ══════════════════════════════════════
+   피드백 (확정 시에만)
+   - 진동: Android에서 동작
+   - 비프음: 모든 기기에서 동작, 볼륨 최대
+   ══════════════════════════════════════ */
 var audioCtx=null;
 
-function feedback(){
-  /* 진동 (Android) */
-  if(navigator.vibrate)navigator.vibrate(150);
+function playConfirmFeedback(){
+  /* 진동 */
+  try{if(navigator.vibrate)navigator.vibrate([150,80,150])}catch(e){}
 
-  /* 비프음 (iOS 포함 모든 기기) */
+  /* 비프음 — 볼륨 최대 */
   try{
     if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
-    var osc=audioCtx.createOscillator();
-    var gain=audioCtx.createGain();
-    osc.connect(gain);gain.connect(audioCtx.destination);
-    osc.frequency.value=1200;
-    gain.gain.value=0.3;
-    osc.start();
-    osc.stop(audioCtx.currentTime+0.15);
-  }catch(e){}
-}
+    /* iOS AudioContext 잠금 해제 */
+    if(audioCtx.state==='suspended')audioCtx.resume();
 
-function feedbackConfirm(){
-  if(navigator.vibrate)navigator.vibrate([100,50,100]);
-  try{
-    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
     var now=audioCtx.currentTime;
-    var osc=audioCtx.createOscillator();var gain=audioCtx.createGain();
-    osc.connect(gain);gain.connect(audioCtx.destination);
-    osc.frequency.setValueAtTime(1000,now);
-    osc.frequency.setValueAtTime(1400,now+0.1);
-    gain.gain.value=0.3;
-    osc.start(now);osc.stop(now+0.2);
+
+    /* 상승 톤 (삐-삑) */
+    var osc1=audioCtx.createOscillator();
+    var gain1=audioCtx.createGain();
+    osc1.connect(gain1);gain1.connect(audioCtx.destination);
+    osc1.type='square';
+    osc1.frequency.value=1000;
+    gain1.gain.value=1.0;
+    osc1.start(now);osc1.stop(now+0.12);
+
+    var osc2=audioCtx.createOscillator();
+    var gain2=audioCtx.createGain();
+    osc2.connect(gain2);gain2.connect(audioCtx.destination);
+    osc2.type='square';
+    osc2.frequency.value=1400;
+    gain2.gain.value=1.0;
+    osc2.start(now+0.15);osc2.stop(now+0.3);
   }catch(e){}
 }
+
+/* iOS AudioContext는 사용자 제스처 후에만 활성화됨 — 터치 시 미리 unlock */
+document.addEventListener('touchstart',function(){
+  try{
+    if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended')audioCtx.resume();
+  }catch(e){}
+},{once:true});
 
 /* ══ 공통: 카메라 목록 ══ */
 var allCameras=[],currentCamIndex=0;
@@ -194,20 +206,16 @@ function onCodeRead(code){
   if(scanned)return;
   if(code===lastCode)matchCount++;else{lastCode=code;matchCount=1}
   readCountEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
-
-  /* 인식될 때마다 피드백 */
-  feedback();
-
   if(matchCount>=CONFIRM_COUNT)onScanConfirmed(code);
 }
-function resetMatch(){if(matchCount>0){matchCount=0;lastCode='';readCountEl.textContent=''}}
+function resetMatch(){matchCount=0;lastCode='';readCountEl.textContent=''}
 
 function onScanConfirmed(code){
   if(scanned)return;scanned=true;
   if(useNative)stopAndroid();else{try{iosScanner.stop()}catch(e){}}
 
-  /* 확정 피드백 */
-  feedbackConfirm();
+  /* 확정 시 피드백 */
+  playConfirmFeedback();
 
   document.getElementById('okCode').textContent=code;
   document.getElementById('okOverlay').classList.add('show');
@@ -271,65 +279,72 @@ function stopAndroid(){
 }
 
 /* ══════════════════════════════════════
-   iOS: html5-qrcode (전체 프레임 스캔)
+   iOS: html5-qrcode
+   - 첫 시작: facingMode로 안정적 시작
+   - 전환: deviceId로 특정 카메라 지정
    ══════════════════════════════════════ */
 var iosScanner=null;
+var iosStarted=false;
 
 function initIOS(){
   document.getElementById('androidArea').style.display='none';
   document.getElementById('scanOverlay').style.display='none';
   document.getElementById('iosReader').style.display='block';
   iosScanner=new Html5Qrcode('iosReader');
+
   discoverCameras().then(function(){
-    if(!allCameras.length){showError('카메라를 찾을 수 없습니다.');return}
     document.getElementById('btnSwitch').textContent='🔄 전환 ('+allCameras.length+'대)';
-    return startIOSCam(currentCamIndex);
-  }).catch(function(){showError('카메라 권한을 확인해 주세요.')});
+    /* iOS 첫 시작: facingMode 사용 (가장 안정적) */
+    return startIOSWithFacingMode();
+  }).catch(function(err){showError('카메라 권한을 확인해 주세요.<br>'+err)});
+}
+
+function startIOSWithFacingMode(){
+  return iosScanner.start(
+    {facingMode:'environment'},
+    {fps:15,qrbox:function(vw,vh){var w=Math.min(vw*.85,380);return{width:Math.floor(w),height:Math.floor(w*.55)}}},
+    function(decoded){onCodeRead(decoded)},
+    function(){}
+  ).then(function(){
+    iosStarted=true;
+    try{var v=document.querySelector('#iosReader video');
+      if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
+        var s=activeTrack.getSettings?activeTrack.getSettings():{};
+        camInfoEl.textContent=(activeTrack.label||'후면 카메라')+' ('+(s.width||'?')+'x'+(s.height||'?')+')'}}catch(e){}
+  });
 }
 
 function startIOSCam(idx){
-  try{iosScanner.stop().catch(function(){})}catch(e){}
   var cam=allCameras[idx];if(!cam)return;
 
-  setTimeout(function(){
+  var doStart=function(){
     iosScanner.start(
       cam.deviceId,
-      {
-        fps:15,
-        /* 스캔 영역 제한 없음 — 전체 프레임에서 바코드 검출 */
-        /* formatsToSupport 미지정 — 모든 포맷 시도 */
-      },
+      {fps:15,qrbox:function(vw,vh){var w=Math.min(vw*.85,380);return{width:Math.floor(w),height:Math.floor(w*.55)}}},
       function(decoded){onCodeRead(decoded)},
       function(){}
     ).then(function(){
+      iosStarted=true;activeTrack=null;
       try{var v=document.querySelector('#iosReader video');
         if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
           var s=activeTrack.getSettings?activeTrack.getSettings():{};
           camInfoEl.textContent=(activeTrack.label||'카메라 '+(idx+1))+' ('+(s.width||'?')+'x'+(s.height||'?')+')'}}catch(e){}
       try{localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}
-    }).catch(function(err){
-      /* deviceId 실패 시 facingMode로 재시도 */
-      iosScanner.start(
-        {facingMode:'environment'},
-        {fps:15},
-        function(decoded){onCodeRead(decoded)},
-        function(){}
-      ).then(function(){
-        camInfoEl.textContent='기본 후면 카메라';
-        try{var v=document.querySelector('#iosReader video');
-          if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
-      }).catch(function(err2){
-        showError('카메라를 시작할 수 없습니다.<br>'+err2);
-      });
-    });
-  },300);
+    }).catch(function(){camInfoEl.textContent='카메라 전환 실패'});
+  };
+
+  if(iosStarted){
+    iosScanner.stop().then(function(){iosStarted=false;setTimeout(doStart,300)}).catch(function(){setTimeout(doStart,300)});
+  }else{
+    doStart();
+  }
 }
 
 /* ══ 초기화 ══ */
 if(useNative)initAndroid();else initIOS();
 
 function showError(msg){document.getElementById('errMsg').innerHTML=msg;document.getElementById('errFull').classList.add('show')}
-window.addEventListener('beforeunload',function(){if(useNative)stopAndroid();else{try{iosScanner.stop()}catch(e){}}});
+window.addEventListener('beforeunload',function(){if(useNative)stopAndroid();else if(iosStarted){try{iosScanner.stop()}catch(e){}}});
 </script>
 </body>
 </html>
