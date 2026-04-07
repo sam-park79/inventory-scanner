@@ -574,51 +574,7 @@ function promptLocation(){
 
 function closeLocModal(){document.getElementById('locModal').classList.remove('show')}
 
-function executeMove(){
-  var location=document.getElementById('locInput').value.trim();
-  if(!location){alert('위치를 입력해 주세요.');return}
-
-  var cbs=document.querySelectorAll('.rv-cb:checked');
-  var items=[];
-  for(var i=0;i<cbs.length;i++){items.push({code:cbs[i].getAttribute('data-code')})}
-
-  closeLocModal();
-  document.getElementById('procOverlay').classList.add('show');
-  document.getElementById('procText').textContent=items.length+'종 상품 → '+location+' 이동 처리 중...';
-
-  fetch(API_URL,{
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify({action:'move',items:items,location:location})
-  })
-  .then(function(r){return r.json()})
-  .then(function(res){
-    document.getElementById('procOverlay').classList.remove('show');
-    if(!res.success){alert('오류: '+(res.error||'알 수 없는 오류'));return}
-
-    /* 로컬 인벤토리 즉시 업데이트 (재로딩 없이 반영) */
-    if(inventory){
-      var movedCodes={};
-      for(var mi=0;mi<items.length;mi++)movedCodes[items[mi].code]=true;
-      for(var ri=0;ri<inventory.length;ri++){
-        if(movedCodes[inventory[ri].c])inventory[ri].p=location;
-      }
-    }
-
-    alert('✅ 상품 이동 완료\n\n'+
-      '• 위치: '+res.location+'\n'+
-      '• 처리: '+res.updated+'건 업데이트\n'+
-      '• 상품: '+res.itemCount+'종');
-
-    document.getElementById('reviewOverlay').classList.remove('show');
-    /* history 정리 — 메인 화면까지 복귀 */
-    try{var bc=0;while(history.state&&history.state.ov&&bc<5){history.back();bc++}}catch(e){}
-  })
-  .catch(function(err){
-    document.getElementById('procOverlay').classList.remove('show');
-    alert('서버 연결 실패: '+err.message);
-  });
-}
+function executeMove(){/* 하단 래퍼에서 대체 */}
 /* ══════════════════════════════════════
    Android 뒤로가기 버튼 처리
    ══════════════════════════════════════ */
