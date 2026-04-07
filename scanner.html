@@ -9,41 +9,64 @@
   <title>바코드 스캔</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     :root{
-      --bg:#0f1117;--surface:#1a1d27;--card:#222633;--border:#2e3345;
+      --bg:#0f1117;--surface:#1a1d27;--border:#2e3345;
       --text:#e8eaf0;--text2:#9ba1b5;--accent:#4f8cff;--green:#34d399;--red:#f87171;
       --font:'Noto Sans KR',system-ui,-apple-system,sans-serif;
     }
-    html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:15px}
+    html,body{height:100%;background:#000;color:var(--text);font-family:var(--font);
+      font-size:15px;overflow:hidden;user-select:none}
 
-    .wrap{display:flex;flex-direction:column;height:100dvh;max-width:520px;margin:0 auto}
+    .wrap{display:flex;flex-direction:column;height:100dvh}
 
+    /* ── 상단 바 ── */
     .top{display:flex;justify-content:space-between;align-items:center;
-      padding:12px 16px;border-bottom:1px solid var(--border)}
-    .top h1{font-size:17px;font-weight:700}
+      padding:10px 16px;background:rgba(15,17,23,.85);position:fixed;top:0;left:0;right:0;z-index:20}
+    .top h1{font-size:16px;font-weight:700}
     .top-btns{display:flex;gap:8px}
-    .btn-t{background:var(--card);border:1px solid var(--border);color:var(--text);
-      height:38px;padding:0 14px;border-radius:10px;font-size:13px;font-weight:500;
-      font-family:var(--font);cursor:pointer;display:inline-flex;align-items:center;gap:4px}
-    .btn-t.active{background:#fbbf24;color:#000;border-color:#fbbf24}
+    .btn-t{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;
+      height:36px;padding:0 14px;border-radius:10px;font-size:13px;font-weight:500;
+      font-family:var(--font);cursor:pointer;display:inline-flex;align-items:center;gap:4px;
+      backdrop-filter:blur(8px);transition:background .2s}
+    .btn-t:active{background:rgba(255,255,255,.2)}
+    .btn-t.active{background:rgba(251,191,36,.9);color:#000;border-color:transparent}
     a.btn-t{text-decoration:none}
 
-    .camera{flex:1;display:flex;flex-direction:column;align-items:center;
-      justify-content:center;padding:8px;overflow:hidden}
-    #reader{width:100%;max-width:480px;border-radius:14px;overflow:hidden}
+    /* ── 카메라 영역 ── */
+    .video-wrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;
+      background:#000;overflow:hidden}
+    #video{width:100%;height:100%;object-fit:cover}
 
-    .hint{text-align:center;padding:10px 20px;font-size:13px;color:var(--text2);line-height:1.5}
+    /* ── 스캔 가이드 오버레이 ── */
+    .scan-overlay{position:fixed;inset:0;z-index:10;pointer-events:none;
+      display:flex;align-items:center;justify-content:center}
+    .scan-guide{position:relative;width:88%;max-width:420px;aspect-ratio:2.2/1;
+      border:2.5px solid var(--green);border-radius:16px;
+      box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
+    .scan-guide::before{content:'';position:absolute;top:-1px;left:50%;
+      transform:translateX(-50%);width:60%;height:3px;background:var(--green);
+      border-radius:2px;animation:scanLine 2s ease-in-out infinite alternate}
+    @keyframes scanLine{
+      0%{top:-1px}
+      100%{top:calc(100% - 2px)}
+    }
 
-    /* 성공 오버레이 */
+    /* ── 하단 힌트 ── */
+    .bottom-bar{position:fixed;bottom:0;left:0;right:0;z-index:20;
+      background:rgba(15,17,23,.85);backdrop-filter:blur(8px);
+      padding:14px 20px;text-align:center}
+    .bottom-bar .hint{font-size:13px;color:var(--text2);line-height:1.5}
+    .bottom-bar .tap-hint{font-size:11px;color:rgba(255,255,255,.35);margin-top:4px}
+
+    /* ── 성공 오버레이 ── */
     .ok-overlay{position:fixed;inset:0;background:rgba(15,17,23,.95);
       display:none;flex-direction:column;align-items:center;justify-content:center;
       z-index:100;padding:40px 20px;text-align:center}
     .ok-overlay.show{display:flex}
     .ok-icon{font-size:64px;margin-bottom:20px}
-    .ok-code{font-size:22px;font-weight:700;color:var(--green);
+    .ok-code{font-size:20px;font-weight:700;color:var(--green);
       background:rgba(52,211,153,.1);padding:12px 24px;border-radius:14px;
       border:1px solid rgba(52,211,153,.25);margin-bottom:12px;word-break:break-all}
     .ok-msg{font-size:14px;color:var(--text2);margin-bottom:24px}
@@ -51,18 +74,14 @@
       border-top-color:var(--green);border-radius:50%;animation:sp .7s linear infinite}
     @keyframes sp{to{transform:rotate(360deg)}}
 
-    .err-bar{margin:8px 16px;padding:12px 16px;background:rgba(248,113,113,.1);
-      border:1px solid rgba(248,113,113,.2);border-radius:12px;font-size:13px;
-      color:var(--red);display:none;text-align:center}
-    .err-bar.show{display:block}
-
-    /* html5-qrcode 오버라이드 */
-    #reader img[alt="Info icon"]{display:none!important}
-    #html5-qrcode-anchor-scan-type-change{display:none!important}
-    #html5-qrcode-button-camera-permission{
-      background:var(--accent)!important;color:#fff!important;border:none!important;
-      border-radius:12px!important;padding:12px 24px!important;font-size:15px!important;
-      font-family:var(--font)!important;cursor:pointer!important}
+    /* ── 에러 ── */
+    .err-full{position:fixed;inset:0;background:var(--bg);z-index:50;
+      display:none;flex-direction:column;align-items:center;justify-content:center;
+      padding:40px 24px;text-align:center}
+    .err-full.show{display:flex}
+    .err-full .icon{font-size:56px;margin-bottom:20px;opacity:.6}
+    .err-full p{font-size:15px;color:var(--text2);line-height:1.7;margin-bottom:20px}
+    .err-full a{color:var(--accent);font-size:14px}
   </style>
 </head>
 <body>
@@ -75,11 +94,21 @@
       </div>
     </div>
 
-    <div class="camera"><div id="reader"></div></div>
-    <div class="hint" id="hint">바코드를 카메라에 비춰주세요 · 자동 인식됩니다</div>
-    <div class="err-bar" id="errBar"></div>
+    <div class="video-wrap" id="videoWrap">
+      <video id="video" autoplay playsinline muted></video>
+    </div>
+
+    <div class="scan-overlay">
+      <div class="scan-guide"></div>
+    </div>
+
+    <div class="bottom-bar">
+      <div class="hint">바코드를 초록 영역 안에 비춰주세요</div>
+      <div class="tap-hint">초점이 안 맞으면 화면을 탭하세요</div>
+    </div>
   </div>
 
+  <!-- 성공 -->
   <div class="ok-overlay" id="okOverlay">
     <div class="ok-icon">✅</div>
     <div class="ok-code" id="okCode"></div>
@@ -87,140 +116,209 @@
     <div class="ok-sp"></div>
   </div>
 
+  <!-- 카메라 에러 -->
+  <div class="err-full" id="errFull">
+    <div class="icon">📸</div>
+    <p id="errMsg">카메라를 사용할 수 없습니다.<br>브라우저 설정에서 카메라 권한을 허용해 주세요.</p>
+    <a id="btnBackErr" href="#">돌아가기</a>
+  </div>
+
 <script>
+/* ── URL 파라미터 ── */
 var params=new URLSearchParams(window.location.search);
 var returnUrl=params.get('returnUrl')||'';
-var btnBack=document.getElementById('btnBack');
-if(returnUrl){btnBack.href=decodeURIComponent(returnUrl)}else{btnBack.style.display='none'}
+document.getElementById('btnBack').href=returnUrl?decodeURIComponent(returnUrl):'#';
+document.getElementById('btnBackErr').href=returnUrl?decodeURIComponent(returnUrl):'#';
 
-var scanner=null;
-var scanned=false;
-var torchOn=false;
+var video=document.getElementById('video');
+var videoWrap=document.getElementById('videoWrap');
 var videoTrack=null;
+var torchOn=false;
+var scanned=false;
+var detector=null;
+var scanTimer=null;
 
-/* ══ 스캐너 시작 ══ */
-startScanner();
+/* ══════════════════════════════════════
+   1. 카메라 시작
+   ══════════════════════════════════════ */
 
-function startScanner(){
-  scanner=new Html5Qrcode('reader');
-
-  /* 카메라 제약조건: 고해상도 + 후면 카메라 */
-  var cameraConfig={
-    facingMode:{exact:'environment'}
-  };
-
-  var scanConfig={
-    fps:15,
-    qrbox:function(vw,vh){
-      /* 1D 바코드용 넓은 스캔 영역 */
-      var w=Math.min(vw*0.92,420);
-      return{width:Math.floor(w),height:Math.floor(w*0.45)};
-    },
-    aspectRatio:1.777778,
-    formatsToSupport:[
-      Html5QrcodeSupportedFormats.CODE_128,
-      Html5QrcodeSupportedFormats.CODE_39,
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.ITF,
-      Html5QrcodeSupportedFormats.CODE_93
-    ],
-    /* 고해상도 요청 */
-    videoConstraints:{
-      facingMode:{exact:'environment'},
-      width:{ideal:1920},
-      height:{ideal:1080}
-    }
-  };
-
-  scanner.start(cameraConfig,scanConfig,onScanSuccess,function(){})
-  .then(function(){
-    /* 카메라 시작 성공 → 자동초점 설정 */
-    applyAutofocus();
-  })
-  .catch(function(err){
-    /* exact:'environment' 실패 시 일반 후면으로 재시도 */
-    cameraConfig={facingMode:'environment'};
-    scanConfig.videoConstraints={facingMode:'environment',width:{ideal:1920},height:{ideal:1080}};
-
-    scanner.start(cameraConfig,scanConfig,onScanSuccess,function(){})
-    .then(function(){applyAutofocus()})
-    .catch(function(err2){
-      var el=document.getElementById('errBar');
-      el.textContent='카메라를 사용할 수 없습니다: '+err2;
-      el.classList.add('show');
-    });
-  });
-}
-
-/**
- * 카메라 비디오 트랙에 연속 자동초점 적용
- */
-function applyAutofocus(){
+async function initCamera(){
   try{
-    var video=document.querySelector('#reader video');
-    if(!video||!video.srcObject)return;
+    /* 카메라 스트림 요청: 고해상도 + 연속 자동초점 */
+    var constraints={
+      video:{
+        facingMode:{ideal:'environment'},
+        width:{ideal:1920,min:1280},
+        height:{ideal:1080,min:720},
+        focusMode:{ideal:'continuous'},
+        /* 자동 화이트밸런스/노출 */
+        whiteBalanceMode:{ideal:'continuous'},
+        exposureMode:{ideal:'continuous'}
+      },
+      audio:false
+    };
 
-    videoTrack=video.srcObject.getVideoTracks()[0];
-    if(!videoTrack)return;
+    var stream=await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject=stream;
+    await video.play();
 
-    var caps=videoTrack.getCapabilities?videoTrack.getCapabilities():{};
+    videoTrack=stream.getVideoTracks()[0];
 
-    /* 연속 자동초점 */
-    if(caps.focusMode&&caps.focusMode.indexOf('continuous')>=0){
-      videoTrack.applyConstraints({advanced:[{focusMode:'continuous'}]})
-      .catch(function(){});
+    /* 연속 자동초점 강제 적용 */
+    applyFocusMode('continuous');
+
+    /* BarcodeDetector 초기화 */
+    if('BarcodeDetector' in window){
+      detector=new BarcodeDetector({
+        formats:['code_128','code_39','ean_13','ean_8',
+                 'upc_a','upc_e','itf','code_93','codabar','qr_code']
+      });
+      startScanning();
+    }else{
+      showError('이 브라우저는 바코드 인식을 지원하지 않습니다.');
     }
 
-    /* 가능하면 줌 약간 (바코드 인식률 향상) */
-    if(caps.zoom&&caps.zoom.min<caps.zoom.max){
-      var zoomTarget=Math.min(caps.zoom.min*1.5, caps.zoom.max);
-      videoTrack.applyConstraints({advanced:[{zoom:zoomTarget}]})
-      .catch(function(){});
-    }
-  }catch(e){
-    console.warn('autofocus 설정 실패:',e);
+  }catch(err){
+    console.error('카메라 오류:',err);
+    showError('카메라를 사용할 수 없습니다.<br>브라우저 설정에서 카메라 권한을 허용해 주세요.');
   }
 }
 
-/**
- * 조명(토치) 토글
- */
-function toggleTorch(){
-  if(!videoTrack)return;
-  try{
-    var caps=videoTrack.getCapabilities?videoTrack.getCapabilities():{};
-    if(!caps.torch)return;
+/* ══════════════════════════════════════
+   2. 바코드 스캔 루프
+   ══════════════════════════════════════ */
 
-    torchOn=!torchOn;
-    videoTrack.applyConstraints({advanced:[{torch:torchOn}]})
-    .then(function(){
-      var btn=document.getElementById('btnTorch');
-      btn.classList.toggle('active',torchOn);
-    })
-    .catch(function(){torchOn=false});
-  }catch(e){}
+function startScanning(){
+  if(!detector||scanned)return;
+
+  scanTimer=setInterval(async function(){
+    if(scanned||video.readyState<2)return;
+
+    try{
+      var results=await detector.detect(video);
+      if(results.length>0){
+        onScanSuccess(results[0].rawValue);
+      }
+    }catch(e){}
+  }, 100); /* 100ms 간격 = 초당 10회 스캔 */
 }
 
-/* ══ 스캔 성공 ══ */
+/* ══════════════════════════════════════
+   3. 스캔 성공
+   ══════════════════════════════════════ */
+
 function onScanSuccess(code){
   if(scanned)return;
   scanned=true;
 
-  if(navigator.vibrate)navigator.vibrate(120);
-  try{scanner.stop()}catch(e){}
+  /* 스캔 중지 */
+  if(scanTimer){clearInterval(scanTimer);scanTimer=null}
 
+  /* 진동 피드백 */
+  if(navigator.vibrate)navigator.vibrate(150);
+
+  /* 성공 표시 */
   document.getElementById('okCode').textContent=code;
   document.getElementById('okOverlay').classList.add('show');
 
+  /* 카메라 정지 */
+  stopCamera();
+
+  /* GAS 웹앱으로 리다이렉트 */
   if(returnUrl){
     var url=decodeURIComponent(returnUrl);
     var sep=url.indexOf('?')>=0?'&':'?';
-    setTimeout(function(){window.location.href=url+sep+'code='+encodeURIComponent(code)},800);
+    setTimeout(function(){
+      window.location.href=url+sep+'code='+encodeURIComponent(code);
+    },800);
   }
 }
+
+/* ══════════════════════════════════════
+   4. 카메라 제어
+   ══════════════════════════════════════ */
+
+/** 초점 모드 적용 */
+function applyFocusMode(mode){
+  if(!videoTrack)return;
+  try{
+    var caps=videoTrack.getCapabilities()||{};
+    if(caps.focusMode&&caps.focusMode.indexOf(mode)>=0){
+      videoTrack.applyConstraints({advanced:[{focusMode:mode}]}).catch(function(){});
+    }
+  }catch(e){}
+}
+
+/** 조명 토글 */
+function toggleTorch(){
+  if(!videoTrack)return;
+  try{
+    var caps=videoTrack.getCapabilities()||{};
+    if(!caps.torch){
+      /* 토치 미지원 시 안내 */
+      var btn=document.getElementById('btnTorch');
+      btn.textContent='🔦 미지원';
+      setTimeout(function(){btn.textContent='🔦 조명'},1500);
+      return;
+    }
+    torchOn=!torchOn;
+    videoTrack.applyConstraints({advanced:[{torch:torchOn}]}).then(function(){
+      document.getElementById('btnTorch').classList.toggle('active',torchOn);
+    }).catch(function(){torchOn=false});
+  }catch(e){}
+}
+
+/** 화면 탭 → 수동 재초점 */
+videoWrap.addEventListener('click',function(e){
+  if(!videoTrack)return;
+
+  try{
+    var caps=videoTrack.getCapabilities()||{};
+
+    /* pointOfInterest 지원 시 탭한 위치로 초점 */
+    if(caps.pointsOfInterest){
+      var rect=video.getBoundingClientRect();
+      var x=(e.clientX-rect.left)/rect.width;
+      var y=(e.clientY-rect.top)/rect.height;
+      videoTrack.applyConstraints({
+        advanced:[{pointsOfInterest:[{x:x,y:y}],focusMode:'manual'}]
+      }).then(function(){
+        /* 잠시 후 다시 연속 초점으로 복귀 */
+        setTimeout(function(){applyFocusMode('continuous')},1500);
+      }).catch(function(){});
+    }else{
+      /* pointOfInterest 미지원: 초점 모드 리셋 */
+      applyFocusMode('manual');
+      setTimeout(function(){applyFocusMode('continuous')},500);
+    }
+  }catch(e){}
+});
+
+/** 카메라 정지 */
+function stopCamera(){
+  if(scanTimer){clearInterval(scanTimer);scanTimer=null}
+  if(video.srcObject){
+    video.srcObject.getTracks().forEach(function(t){t.stop()});
+    video.srcObject=null;
+  }
+  videoTrack=null;
+}
+
+/** 에러 표시 */
+function showError(msg){
+  document.getElementById('errMsg').innerHTML=msg;
+  document.getElementById('errFull').classList.add('show');
+}
+
+/* ── 시작 ── */
+initCamera();
+
+/* ── 페이지 떠날 때 정리 ── */
+window.addEventListener('beforeunload',stopCamera);
+document.addEventListener('visibilitychange',function(){
+  if(document.hidden)stopCamera();
+  else if(!scanned)initCamera();
+});
 </script>
 </body>
 </html>
