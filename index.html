@@ -172,7 +172,7 @@
       <h1>📦 재고 조회</h1>
       <div class="header-btns">
         <button class="hdr-btn move" onclick="startMoveMode()">📦 상품 이동</button>
-        <button class="hdr-btn" onclick="loadData()">🔄 새로고침</button>
+        <button class="hdr-btn" onclick="loadData(true)">🔄 새로고침</button>
       </div>
     </div>
     <p>품목코드 / 품목명 검색 · 바코드 스캔</p>
@@ -273,10 +273,12 @@ var MAX_RESULTS=50;
 var inventory=null;
 var dataLoading=false;
 
-function loadData(){
+function loadData(forceRefresh){
   if(dataLoading)return;dataLoading=true;
   dataStatusEl.textContent='데이터 로딩 중...';dataStatusEl.className='data-status ld';
-  fetch(API_URL+'?action=load').then(function(r){return r.json()}).then(function(res){
+  var url=API_URL+'?action=load';
+  if(forceRefresh)url+='&refresh=1';
+  fetch(url).then(function(r){return r.json()}).then(function(res){
     dataLoading=false;
     if(!res.success){dataStatusEl.textContent='로드 실패: '+res.error;dataStatusEl.className='data-status er';return}
     inventory=res.data;
@@ -375,10 +377,11 @@ var scanned=false,lastCode='',matchCount=0,torchOn=false,activeTrack=null;
 var scanMode='search'; /* 'search' | 'move' */
 var moveScannedItems={}; /* {code: qty} */
 var moveScannedTotal=0;
+var lastConfirmedCode=''; /* 이동모드: 마지막 확정 코드 (같은 바코드 연속 방지) */
 
 function openScanner(mode){
   scanMode=mode||'search';
-  scanned=false;lastCode='';matchCount=0;torchOn=false;
+  scanned=false;lastCode='';matchCount=0;torchOn=false;lastConfirmedCode='';
   scReadEl.textContent='';scCamInfoEl.textContent='';
   document.getElementById('btnTorch').classList.remove('active');
   document.getElementById('scannerOverlay').classList.add('show');
@@ -435,6 +438,10 @@ function toggleTorch(){
 
 function onCodeRead(code){
   if(scanned&&scanMode==='search')return;
+  /* 이동모드: 방금 확정한 바코드와 같으면 무시 */
+  if(scanMode==='move'&&code===lastConfirmedCode)return;
+  /* 다른 코드가 감지되면 확정코드 해제 */
+  if(code!==lastConfirmedCode)lastConfirmedCode='';
   if(code===lastCode)matchCount++;else{lastCode=code;matchCount=1}
   scReadEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
   if(matchCount>=CONFIRM_COUNT)onScanConfirmed(code);
@@ -448,8 +455,11 @@ function onScanConfirmed(code){
     moveScannedTotal++;
     document.getElementById('scCnt').textContent='스캔: '+moveScannedTotal+'건 ('+Object.keys(moveScannedItems).length+'종)';
     document.getElementById('scLast').textContent='마지막: '+code;
-    /* 스캔 리셋 — 계속 스캔 가능 */
-    scanned=false;lastCode='';matchCount=0;scReadEl.textContent='';
+    /* 스캔 리셋 — 다른 바코드 스캔 가능, 같은 바코드는 카메라 이동 후 재스캔 가능 */
+    lastConfirmedCode=code;
+    scanned=false;matchCount=0;scReadEl.textContent='';
+    /* 1.5초 후 자동 해제 (iOS 폴백 — Android는 빈 프레임 감지로 즉시 해제) */
+    setTimeout(function(){if(lastConfirmedCode===code)lastConfirmedCode=''},1500);
     return;
   }
 
@@ -491,7 +501,7 @@ function startAndroidScan(){if(scanTimer)clearInterval(scanTimer);
     var gw=vw*.9,gh=gw/1.8,gx=(vw-gw)/2,gy=(vh-gh)/2;
     cropCanvas.width=gw;cropCanvas.height=gh;cropCtx.drawImage(scanVideo,gx,gy,gw,gh,0,0,gw,gh);
     nativeDetector.detect(cropCanvas).then(function(r){if(r.length>0)onCodeRead(r[0].rawValue);
-      else if(matchCount>0){matchCount=0;lastCode='';scReadEl.textContent=''}}).catch(function(){});
+      else if(matchCount>0||lastConfirmedCode){matchCount=0;lastCode='';lastConfirmedCode='';scReadEl.textContent=''}}).catch(function(){});
   },100);
 }
 function stopAndroid(){if(scanTimer){clearInterval(scanTimer);scanTimer=null}
@@ -597,12 +607,95 @@ function executeMove(){
       '• 상품: '+res.itemCount+'종');
 
     document.getElementById('reviewOverlay').classList.remove('show');
+    /* history 정리 — 메인 화면까지 복귀 */
+    try{var bc=0;while(history.state&&history.state.ov&&bc<5){history.back();bc++}}catch(e){}
   })
   .catch(function(err){
     document.getElementById('procOverlay').classList.remove('show');
     alert('서버 연결 실패: '+err.message);
   });
 }
+/* ══════════════════════════════════════
+   Android 뒤로가기 버튼 처리
+   ══════════════════════════════════════ */
+
+var historyDepth=0;
+
+function histPush(){historyDepth++;history.pushState({app:historyDepth},'');}
+function histBack(){if(historyDepth>0){historyDepth--;history.back()}}
+
+/* 뒤로가기 시 최상위 오버레이 닫기 */
+window.addEventListener('popstate',function(){
+  if(historyDepth>0)historyDepth--;
+
+  var modal=document.getElementById('locModal');
+  var review=document.getElementById('reviewOverlay');
+  var scanner=document.getElementById('scannerOverlay');
+
+  if(modal.classList.contains('show')){
+    modal.classList.remove('show');
+  }else if(review.classList.contains('show')){
+    review.classList.remove('show');
+  }else if(scanner.classList.contains('show')){
+    scanner.classList.remove('show');
+    if(useNative)stopAndroid();else{try{Quagga.stop()}catch(e){}}
+  }
+});
+
+/* 열기: histPush */
+var _o1=openScanner;openScanner=function(m){histPush();_o1(m)};
+var _o2=promptLocation;promptLocation=function(){histPush();_o2()};
+
+/* showReview: scanner를 닫고 review를 여는데 history 깊이는 유지 (교체) */
+var _o3=showReview;showReview=function(){_o3()};
+
+/* 닫기 버튼: histBack (popstate가 실제 닫기 처리) */
+document.querySelector('[onclick="closeScanner()"]').setAttribute('onclick','histBack()');
+document.querySelector('.rv-close').setAttribute('onclick','histBack()');
+document.querySelector('.modal-cancel').setAttribute('onclick','histBack()');
+
+/* 상품이동 완료 후 모든 overlay 닫고 history 초기화 */
+var _execMove=executeMove;
+executeMove=function(){
+  var location=document.getElementById('locInput').value.trim();
+  if(!location){alert('위치를 입력해 주세요.');return}
+
+  var cbs=document.querySelectorAll('.rv-cb:checked');
+  var items=[];for(var i=0;i<cbs.length;i++){items.push({code:cbs[i].getAttribute('data-code')})}
+
+  document.getElementById('locModal').classList.remove('show');
+  document.getElementById('procOverlay').classList.add('show');
+  document.getElementById('procText').textContent=items.length+'종 상품 → '+location+' 이동 처리 중...';
+
+  fetch(API_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({action:'move',items:items,location:location})
+  })
+  .then(function(r){return r.json()})
+  .then(function(res){
+    document.getElementById('procOverlay').classList.remove('show');
+    if(!res.success){alert('오류: '+(res.error||''));return}
+
+    if(inventory){
+      var mc={};for(var mi=0;mi<items.length;mi++)mc[items[mi].code]=true;
+      for(var ri=0;ri<inventory.length;ri++){if(mc[inventory[ri].c])inventory[ri].p=location}
+    }
+
+    alert('✅ 상품 이동 완료\n\n• 위치: '+res.location+'\n• 처리: '+res.updated+'건\n• 상품: '+res.itemCount+'종');
+
+    document.getElementById('reviewOverlay').classList.remove('show');
+    document.getElementById('scannerOverlay').classList.remove('show');
+
+    /* history 메인으로 복귀 */
+    if(historyDepth>0)history.go(-historyDepth);
+    historyDepth=0;
+  })
+  .catch(function(err){
+    document.getElementById('procOverlay').classList.remove('show');
+    alert('서버 연결 실패: '+err.message);
+  });
+};
 </script>
 </body>
 </html>
