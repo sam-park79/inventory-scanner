@@ -21,7 +21,6 @@
 
     .wrap{display:flex;flex-direction:column;height:100dvh}
 
-    /* 상단 */
     .top{display:flex;justify-content:space-between;align-items:center;
       padding:10px 16px;background:rgba(15,17,23,.85);position:fixed;top:0;left:0;right:0;z-index:20}
     .top h1{font-size:16px;font-weight:700}
@@ -34,30 +33,27 @@
     .btn-t.active{background:rgba(251,191,36,.9);color:#000;border-color:transparent}
     a.btn-t{text-decoration:none}
 
-    /* 카메라 */
     .video-wrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;
       background:#000;overflow:hidden}
     #video{width:100%;height:100%;object-fit:cover}
 
-    /* 스캔 가이드 */
+    /* 스캔 가이드: 근거리에 맞게 넓고 높게 */
     .scan-overlay{position:fixed;inset:0;z-index:10;pointer-events:none;
       display:flex;align-items:center;justify-content:center}
-    .scan-guide{position:relative;width:88%;max-width:420px;aspect-ratio:2/1;
+    .scan-guide{position:relative;width:90%;max-width:440px;aspect-ratio:1.8/1;
       border:2.5px solid var(--green);border-radius:16px;
       box-shadow:0 0 0 9999px rgba(0,0,0,.5)}
-    .scan-line{position:absolute;left:10%;right:10%;height:2px;background:var(--green);
+    .scan-line{position:absolute;left:8%;right:8%;height:2px;background:var(--green);
       border-radius:2px;opacity:.7;animation:scanAnim 2s ease-in-out infinite alternate}
     @keyframes scanAnim{0%{top:15%}100%{top:85%}}
 
-    /* 하단 */
     .bottom-bar{position:fixed;bottom:0;left:0;right:0;z-index:20;
       background:rgba(15,17,23,.85);backdrop-filter:blur(8px);
       padding:12px 20px;text-align:center}
     .hint{font-size:13px;color:var(--text2);line-height:1.5}
-    .read-count{font-size:11px;color:rgba(52,211,153,.6);margin-top:3px;min-height:16px}
+    .read-count{font-size:12px;color:var(--green);margin-top:4px;min-height:18px;font-weight:600}
     .tap-hint{font-size:11px;color:rgba(255,255,255,.3);margin-top:2px}
 
-    /* 성공 */
     .ok-overlay{position:fixed;inset:0;background:rgba(15,17,23,.95);
       display:none;flex-direction:column;align-items:center;justify-content:center;
       z-index:100;padding:40px 20px;text-align:center}
@@ -71,7 +67,6 @@
       border-top-color:var(--green);border-radius:50%;animation:sp .7s linear infinite}
     @keyframes sp{to{transform:rotate(360deg)}}
 
-    /* 에러 */
     .err-full{position:fixed;inset:0;background:var(--bg);z-index:50;
       display:none;flex-direction:column;align-items:center;justify-content:center;
       padding:40px 24px;text-align:center}
@@ -97,14 +92,14 @@
       <video id="video" autoplay playsinline muted></video>
     </div>
 
-    <div class="scan-overlay" id="scanOverlay">
+    <div class="scan-overlay">
       <div class="scan-guide"><div class="scan-line"></div></div>
     </div>
 
     <div class="bottom-bar">
-      <div class="hint">바코드를 초록 영역 안에 비춰주세요</div>
+      <div class="hint">8~15cm 거리에서 바코드를 비춰주세요</div>
       <div class="read-count" id="readCount"></div>
-      <div class="tap-hint">초점이 안 맞으면 화면을 탭하세요</div>
+      <div class="tap-hint">흐리면 화면을 탭하여 초점을 맞추세요</div>
     </div>
   </div>
 
@@ -124,17 +119,14 @@
   <canvas id="cropCanvas"></canvas>
 
 <script>
-/* ── 설정 ── */
-var CONFIRM_COUNT=3;   /* 동일 결과 N회 연속 일치 시 확정 */
-var SCAN_INTERVAL=120; /* 스캔 간격(ms) */
+var CONFIRM_COUNT=3;
+var SCAN_INTERVAL=100;
 
-/* ── URL 파라미터 ── */
 var params=new URLSearchParams(window.location.search);
 var returnUrl=params.get('returnUrl')||'';
 document.getElementById('btnBack').href=returnUrl?decodeURIComponent(returnUrl):'#';
 document.getElementById('btnBackErr').href=returnUrl?decodeURIComponent(returnUrl):'#';
 
-/* ── 요소 ── */
 var video=document.getElementById('video');
 var videoWrap=document.getElementById('videoWrap');
 var cropCanvas=document.getElementById('cropCanvas');
@@ -146,22 +138,22 @@ var torchOn=false;
 var scanned=false;
 var detector=null;
 var scanTimer=null;
-
-/* 연속 일치 카운터 */
 var lastCode='';
 var matchCount=0;
 
-/* ══════════════════════════════════════
-   1. 카메라 시작
-   ══════════════════════════════════════ */
+/* ══ 1. 카메라 시작 ══ */
 
 async function initCamera(){
   try{
+    /*
+     * 핵심: 줌 없음, 고해상도, 자동초점만 요청
+     * 줌을 올리면 최소 초점거리가 멀어져 근거리에서 초점이 안 맞음
+     */
     var stream=await navigator.mediaDevices.getUserMedia({
       video:{
         facingMode:{ideal:'environment'},
-        width:{ideal:1920,min:1280},
-        height:{ideal:1080,min:720}
+        width:{ideal:1920},
+        height:{ideal:1080}
       },
       audio:false
     });
@@ -170,10 +162,16 @@ async function initCamera(){
     await video.play();
     videoTrack=stream.getVideoTracks()[0];
 
-    /* 카메라 기능 적용 */
-    applyCameraSettings();
+    /* 연속 자동초점만 적용 (다른 설정 건드리지 않음) */
+    if(videoTrack){
+      try{
+        var caps=videoTrack.getCapabilities()||{};
+        if(caps.focusMode&&caps.focusMode.indexOf('continuous')>=0){
+          await videoTrack.applyConstraints({advanced:[{focusMode:'continuous'}]});
+        }
+      }catch(e){}
+    }
 
-    /* BarcodeDetector 확인 */
     if('BarcodeDetector' in window){
       detector=new BarcodeDetector({
         formats:['code_128','code_39','ean_13','ean_8',
@@ -189,92 +187,38 @@ async function initCamera(){
   }
 }
 
-/**
- * 연속 자동초점 + 근거리 줌 적용
- */
-function applyCameraSettings(){
-  if(!videoTrack)return;
-  try{
-    var caps=videoTrack.getCapabilities()||{};
-
-    var advanced=[];
-
-    /* 연속 자동초점 */
-    if(caps.focusMode&&caps.focusMode.indexOf('continuous')>=0){
-      advanced.push({focusMode:'continuous'});
-    }
-
-    /* 근거리 초점 보정: focusDistance 지원 시 가까운 거리로 설정 */
-    if(caps.focusDistance&&caps.focusDistance.min!=null){
-      /* 5~15cm 거리에 맞는 초점거리 (미터 단위: 0.05~0.15) */
-      var nearDist=Math.max(caps.focusDistance.min, 0.08);
-      advanced.push({focusDistance:nearDist,focusMode:'manual'});
-      /* 잠시 후 연속으로 전환 */
-      setTimeout(function(){
-        try{videoTrack.applyConstraints({advanced:[{focusMode:'continuous'}]})}catch(e){}
-      },1000);
-    }
-
-    /* 줌: 근거리 스캔에 유리하게 2배 적용 */
-    if(caps.zoom&&caps.zoom.max>1){
-      var targetZoom=Math.min(2.0,caps.zoom.max);
-      advanced.push({zoom:targetZoom});
-    }
-
-    if(advanced.length>0){
-      videoTrack.applyConstraints({advanced:advanced}).catch(function(){
-        /* 일부 속성 실패 시 개별 적용 */
-        advanced.forEach(function(c){
-          try{videoTrack.applyConstraints({advanced:[c]})}catch(e){}
-        });
-      });
-    }
-  }catch(e){}
-}
-
-/* ══════════════════════════════════════
-   2. 바코드 스캔 (크롭 영역만 분석)
-   ══════════════════════════════════════ */
+/* ══ 2. 크롭 스캔 ══ */
 
 function startScanning(){
   if(!detector||scanned)return;
-
   scanTimer=setInterval(function(){
     if(scanned||video.readyState<2)return;
     scanCroppedRegion();
   },SCAN_INTERVAL);
 }
 
-/**
- * 비디오에서 스캔 가이드 영역만 잘라내어 BarcodeDetector에 전달
- * → 가이드 밖의 잡음/다른 바코드 오인식 방지
- */
 async function scanCroppedRegion(){
   try{
     var vw=video.videoWidth;
     var vh=video.videoHeight;
     if(!vw||!vh)return;
 
-    /* 스캔 가이드 영역 계산 (CSS와 동일 비율)
-       가로: 88%, 세로: 가로의 50% (aspect-ratio 2/1) */
-    var guideW=vw*0.88;
-    var guideH=guideW*0.5;
+    /* 스캔 가이드 영역 (CSS와 동일: 90% 너비, 1.8:1 비율) */
+    var guideW=vw*0.90;
+    var guideH=guideW/1.8;
     var guideX=(vw-guideW)/2;
     var guideY=(vh-guideH)/2;
 
-    /* 캔버스에 크롭 */
     cropCanvas.width=guideW;
     cropCanvas.height=guideH;
     cropCtx.drawImage(video,guideX,guideY,guideW,guideH,0,0,guideW,guideH);
 
-    /* 크롭된 이미지에서만 바코드 검출 */
     var results=await detector.detect(cropCanvas);
 
     if(results.length>0){
-      var code=results[0].rawValue;
-      onCodeRead(code);
+      onCodeRead(results[0].rawValue);
     }else{
-      /* 인식 실패 시 카운터 리셋 */
+      /* 일정 시간 인식 없으면 카운터 리셋 */
       if(matchCount>0){
         matchCount=0;
         lastCode='';
@@ -284,9 +228,6 @@ async function scanCroppedRegion(){
   }catch(e){}
 }
 
-/**
- * 코드 읽힘 → 연속 일치 검증
- */
 function onCodeRead(code){
   if(code===lastCode){
     matchCount++;
@@ -295,16 +236,14 @@ function onCodeRead(code){
     matchCount=1;
   }
 
-  readCountEl.textContent='인식: '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
+  readCountEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
 
   if(matchCount>=CONFIRM_COUNT){
     onScanConfirmed(code);
   }
 }
 
-/* ══════════════════════════════════════
-   3. 스캔 확정
-   ══════════════════════════════════════ */
+/* ══ 3. 확정 ══ */
 
 function onScanConfirmed(code){
   if(scanned)return;
@@ -315,7 +254,6 @@ function onScanConfirmed(code){
 
   document.getElementById('okCode').textContent=code;
   document.getElementById('okOverlay').classList.add('show');
-
   stopCamera();
 
   if(returnUrl){
@@ -327,9 +265,7 @@ function onScanConfirmed(code){
   }
 }
 
-/* ══════════════════════════════════════
-   4. 카메라 제어
-   ══════════════════════════════════════ */
+/* ══ 4. 카메라 제어 ══ */
 
 function toggleTorch(){
   if(!videoTrack)return;
@@ -348,23 +284,15 @@ function toggleTorch(){
   }catch(e){}
 }
 
-/* 화면 탭 → 재초점 */
-videoWrap.addEventListener('click',function(e){
+/* 탭 → 초점 리셋 */
+videoWrap.addEventListener('click',function(){
   if(!videoTrack)return;
   try{
-    var caps=videoTrack.getCapabilities()||{};
-
-    if(caps.focusMode){
-      /* 초점 리셋: manual → continuous */
-      videoTrack.applyConstraints({advanced:[{focusMode:'manual'}]})
-      .then(function(){
-        return new Promise(function(r){setTimeout(r,300)});
-      })
-      .then(function(){
-        return videoTrack.applyConstraints({advanced:[{focusMode:'continuous'}]});
-      })
-      .catch(function(){});
-    }
+    /* manual로 전환 후 바로 continuous로 복귀 → 카메라가 재초점 시도 */
+    videoTrack.applyConstraints({advanced:[{focusMode:'manual'}]})
+    .then(function(){return new Promise(function(r){setTimeout(r,200)})})
+    .then(function(){return videoTrack.applyConstraints({advanced:[{focusMode:'continuous'}]})})
+    .catch(function(){});
   }catch(e){}
 });
 
@@ -382,7 +310,6 @@ function showError(msg){
   document.getElementById('errFull').classList.add('show');
 }
 
-/* ── 시작 ── */
 initCamera();
 
 window.addEventListener('beforeunload',stopCamera);
