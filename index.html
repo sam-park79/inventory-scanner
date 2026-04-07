@@ -458,8 +458,6 @@ function onScanConfirmed(code){
     /* 스캔 리셋 — 다른 바코드 스캔 가능, 같은 바코드는 카메라 이동 후 재스캔 가능 */
     lastConfirmedCode=code;
     scanned=false;matchCount=0;scReadEl.textContent='';
-    /* 1.5초 후 자동 해제 (iOS 폴백 — Android는 빈 프레임 감지로 즉시 해제) */
-    setTimeout(function(){if(lastConfirmedCode===code)lastConfirmedCode=''},1500);
     return;
   }
 
@@ -519,6 +517,12 @@ function initIOSScanner(){
     try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
     discoverCameras()});
   Quagga.onDetected(function(result){if(result.codeResult.code)onCodeRead(result.codeResult.code)});
+  /* 빈 프레임 감지: 바코드 없는 프레임이 연속되면 lastConfirmedCode 해제 */
+  var noDetectFrames=0;
+  Quagga.onProcessed(function(result){
+    if(result&&result.codeResult&&result.codeResult.code){noDetectFrames=0}
+    else{noDetectFrames++;if(noDetectFrames>8&&lastConfirmedCode){lastConfirmedCode='';noDetectFrames=0}}
+  });
 }
 function restartQuagga(idx){try{Quagga.stop()}catch(e){}var cam=allCameras[idx];
   var cs=cam?{deviceId:{exact:cam.deviceId}}:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
@@ -658,14 +662,20 @@ document.querySelector('.modal-cancel').setAttribute('onclick','histBack()');
 var _execMove=executeMove;
 executeMove=function(){
   var location=document.getElementById('locInput').value.trim();
-  if(!location){alert('위치를 입력해 주세요.');return}
+
+  /* 빈 입력 → 상품위치 삭제 확인 */
+  if(!location){
+    if(!confirm('상품위치 정보를 삭제하시겠습니까?'))return;
+  }
 
   var cbs=document.querySelectorAll('.rv-cb:checked');
   var items=[];for(var i=0;i<cbs.length;i++){items.push({code:cbs[i].getAttribute('data-code')})}
 
   document.getElementById('locModal').classList.remove('show');
   document.getElementById('procOverlay').classList.add('show');
-  document.getElementById('procText').textContent=items.length+'종 상품 → '+location+' 이동 처리 중...';
+  document.getElementById('procText').textContent=location
+    ?items.length+'종 상품 → '+location+' 이동 처리 중...'
+    :items.length+'종 상품 위치 정보 삭제 중...';
 
   fetch(API_URL,{
     method:'POST',
@@ -682,7 +692,9 @@ executeMove=function(){
       for(var ri=0;ri<inventory.length;ri++){if(mc[inventory[ri].c])inventory[ri].p=location}
     }
 
-    alert('✅ 상품 이동 완료\n\n• 위치: '+res.location+'\n• 처리: '+res.updated+'건\n• 상품: '+res.itemCount+'종');
+    alert(location
+      ?'✅ 상품 이동 완료\n\n• 위치: '+res.location+'\n• 처리: '+res.updated+'건\n• 상품: '+res.itemCount+'종'
+      :'✅ 상품위치 삭제 완료\n\n• 처리: '+res.updated+'건\n• 상품: '+res.itemCount+'종');
 
     document.getElementById('reviewOverlay').classList.remove('show');
     document.getElementById('scannerOverlay').classList.remove('show');
