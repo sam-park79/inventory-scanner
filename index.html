@@ -51,7 +51,8 @@
     .results{flex:1;overflow-y:auto;padding:0 16px 100px;-webkit-overflow-scrolling:touch}
     .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;position:relative}
     .card-head{display:flex;align-items:center;padding:12px 14px 8px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:6px}
-    .card-head .code{font-size:12px;font-weight:600;color:var(--accent);background:rgba(79,140,255,.12);padding:2px 8px;border-radius:6px}
+    .card-head .code{font-size:12px;font-weight:600;color:var(--accent);background:rgba(79,140,255,.12);padding:2px 8px;border-radius:6px;cursor:pointer;-webkit-user-select:none;user-select:none}
+    .card-head .code:active{background:rgba(79,140,255,.3)}
     .card-head .loc-tag{font-size:11px;font-weight:600;color:var(--orange);background:rgba(251,191,36,.12);padding:2px 8px;border-radius:6px}
     .card-head .total{font-size:12px;font-weight:600;color:var(--green);margin-left:auto}
     .card-body{padding:10px 14px 12px}
@@ -69,7 +70,7 @@
     .pt-value{font-size:14px;font-weight:700;color:var(--orange);line-height:1.3;white-space:nowrap}
     .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:70px 20px;text-align:center}
     .empty-icon{font-size:44px;margin-bottom:14px;opacity:.5}
-    .empty-title{font-size:15px;font-weight:600;margin-bottom:4px}.empty-desc{font-size:12px;color:var(--text2)}
+    .empty-title{font-size:15px;font-weight:600;margin-bottom:12px}.empty-desc{font-size:14px;color:var(--text2);line-height:1.6}
     .error-msg{margin:10px 16px;padding:10px 14px;background:rgba(248,113,113,.1);
       border:1px solid rgba(248,113,113,.25);border-radius:var(--radius);font-size:12px;color:var(--red);display:none}
 
@@ -401,7 +402,7 @@ function renderResults(data){
   var h='';
   for(var i=0;i<data.length;i++){
     var d=data[i];
-    h+='<div class="card"><div class="card-head"><span class="code">'+esc(d.itemCode)+'</span>';
+    h+='<div class="card"><div class="card-head"><span class="code" onclick="copyCode(this)">'+esc(d.itemCode)+'</span>';
     if(d.itemLocation)h+='<span class="loc-tag">📍 '+esc(d.itemLocation)+'</span>';
     h+='<span class="total">총 '+d.totalQty+'개</span></div><div class="card-body">';
     if(d.price)h+='<span class="price-tag"><span class="pt-label">소비자가</span><span class="pt-value">'+formatPrice(d.price)+'원</span></span>';
@@ -422,6 +423,28 @@ function formatPrice(v){
   var n=String(v).replace(/[^0-9]/g,'');
   if(!n)return v;
   return n.replace(/\B(?=(\d{3})+(?!\d))/g,',');
+}
+
+function copyCode(el){
+  var code=el.textContent;
+  if(!code)return;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(code).then(function(){showCopyToast(el)}).catch(function(){fallbackCopy(code,el)});
+  }else{fallbackCopy(code,el)}
+}
+
+function fallbackCopy(text,el){
+  var ta=document.createElement('textarea');
+  ta.value=text;ta.style.cssText='position:fixed;left:-9999px';
+  document.body.appendChild(ta);ta.select();
+  try{document.execCommand('copy');showCopyToast(el)}catch(e){}
+  document.body.removeChild(ta);
+}
+
+function showCopyToast(el){
+  var orig=el.textContent;
+  el.textContent='✓ 복사됨';el.style.background='rgba(52,211,153,.25)';
+  setTimeout(function(){el.textContent=orig;el.style.background=''},1000);
 }
 
 /* ══════════════════════════════════════
