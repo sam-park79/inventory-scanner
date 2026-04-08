@@ -75,7 +75,8 @@
       border:1px solid rgba(248,113,113,.25);border-radius:var(--radius);font-size:12px;color:var(--red);display:none}
 
     /* ── 스캐너 오버레이 ── */
-    .scanner-overlay{position:fixed;inset:0;z-index:100;background:#000;display:none;flex-direction:column}
+    .scanner-overlay{position:fixed;inset:0;z-index:100;background:#000;display:none;flex-direction:column;
+      -ms-touch-action:manipulation;touch-action:manipulation}
     .scanner-overlay.show{display:flex}
     .sc-top{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;
       background:rgba(15,17,23,.85);padding-top:max(8px,env(safe-area-inset-top));z-index:130}
@@ -119,7 +120,8 @@
     .btn-scan-done.show{display:block}
 
     /* ── 리뷰 오버레이 (상품 이동 확인) ── */
-    .review-overlay{position:fixed;inset:0;z-index:200;background:var(--bg);display:none;flex-direction:column}
+    .review-overlay{position:fixed;inset:0;z-index:200;background:var(--bg);display:none;flex-direction:column;
+      -ms-touch-action:manipulation;touch-action:manipulation}
     .review-overlay.show{display:flex}
     .rv-top{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;
       padding-top:max(14px,env(safe-area-inset-top))}
@@ -513,10 +515,13 @@ function closeScanner(){
   if(useNative)stopAndroid();else{try{Quagga.stop()}catch(e){}}
 }
 
-function startMoveMode(){openScanner('move')}
+function startMoveMode(){scanFromReview=false;openScanner('move')}
+
+var scanFromReview=false;
 
 function resumeMoveScan(){
   /* 리뷰에서 스캐너로 복귀 (기존 스캔 데이터 유지) */
+  scanFromReview=true;
   document.getElementById('reviewOverlay').classList.remove('show');
   scanMode='move';
   scanned=false;lastCode='';matchCount=0;torchOn=false;lastConfirmedCode='';emptyFrames=0;
@@ -683,6 +688,7 @@ function findLocationByCode(code){
 
 function showReview(){
   closeScanner();
+  scanFromReview=false;
   renderReviewTable();
   document.getElementById('reviewOverlay').classList.add('show');
   if(Object.keys(moveScannedItems).length===0){
@@ -749,6 +755,12 @@ window.addEventListener('popstate',function(){
   }else if(scanner.classList.contains('show')){
     scanner.classList.remove('show');
     if(useNative)stopAndroid();else{try{Quagga.stop()}catch(e){}}
+    /* 리뷰에서 열린 스캐너 → 리뷰로 복귀 */
+    if(scanFromReview){
+      scanFromReview=false;
+      renderReviewTable();
+      review.classList.add('show');
+    }
   }
 });
 
