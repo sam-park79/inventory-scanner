@@ -258,7 +258,7 @@
     <div class="sc-btns">
       <button class="sc-btn sw" id="btnSwitch" onclick="switchCamera()">🔄 카메라 전환</button>
       <button class="sc-btn" id="btnTorch" onclick="toggleTorch()">🔦</button>
-      <button class="sc-btn" onclick="closeScanner()">닫기</button>
+      <button class="sc-btn" onclick="closeScannerBtn()">닫기</button>
     </div>
   </div>
   <div class="sc-counter" id="scCounter">
@@ -515,6 +515,22 @@ function closeScanner(){
   if(useNative)stopAndroid();else{try{Quagga.stop()}catch(e){}}
 }
 
+function closeScannerBtn(){
+  /* 이동모드에서 스캔 데이터가 있으면 경고 */
+  if(scanMode==='move'&&moveScannedTotal>0&&!scanFromReview){
+    if(!confirm('스캔한 '+moveScannedTotal+'건의 데이터가 초기화됩니다.\n정말 나가시겠습니까?'))return;
+  }
+  closeScanner();
+  if(scanFromReview){
+    scanFromReview=false;
+    renderReviewTable();
+    document.getElementById('reviewOverlay').classList.add('show');
+    if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back()}
+  }else{
+    if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back()}
+  }
+}
+
 function startMoveMode(){scanFromReview=false;openScanner('move')}
 
 var scanFromReview=false;
@@ -736,12 +752,14 @@ function executeMove(){/* 하단 래퍼에서 대체 */}
    ══════════════════════════════════════ */
 
 var historyDepth=0;
+var skipNextPopstate=false;
 
 function histPush(){historyDepth++;history.pushState({app:historyDepth},'');}
 function histBack(){if(historyDepth>0){historyDepth--;history.back()}}
 
 /* 뒤로가기 시 최상위 오버레이 닫기 */
 window.addEventListener('popstate',function(){
+  if(skipNextPopstate){skipNextPopstate=false;return}
   if(historyDepth>0)historyDepth--;
 
   var modal=document.getElementById('locModal');
@@ -751,11 +769,22 @@ window.addEventListener('popstate',function(){
   if(modal.classList.contains('show')){
     modal.classList.remove('show');
   }else if(review.classList.contains('show')){
+    if(moveScannedTotal>0){
+      if(!confirm('스캔한 '+moveScannedTotal+'건의 데이터가 초기화됩니다.\n정말 나가시겠습니까?')){
+        histPush();return;
+      }
+    }
     review.classList.remove('show');
   }else if(scanner.classList.contains('show')){
+    /* 이동모드에서 스캔 데이터가 있으면 경고 */
+    if(scanMode==='move'&&moveScannedTotal>0&&!scanFromReview){
+      if(!confirm('스캔한 '+moveScannedTotal+'건의 데이터가 초기화됩니다.\n정말 나가시겠습니까?')){
+        /* 취소 → history 복원 */
+        histPush();return;
+      }
+    }
     scanner.classList.remove('show');
     if(useNative)stopAndroid();else{try{Quagga.stop()}catch(e){}}
-    /* 리뷰에서 열린 스캐너 → 리뷰로 복귀 */
     if(scanFromReview){
       scanFromReview=false;
       renderReviewTable();
@@ -772,7 +801,6 @@ var _o2=promptLocation;promptLocation=function(){histPush();_o2()};
 var _o3=showReview;showReview=function(){_o3()};
 
 /* 닫기 버튼: histBack (popstate가 실제 닫기 처리) */
-document.querySelector('[onclick="closeScanner()"]').setAttribute('onclick','histBack()');
 document.querySelector('.rv-close').setAttribute('onclick','histBack()');
 document.querySelector('.modal-cancel').setAttribute('onclick','histBack()');
 
