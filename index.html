@@ -353,7 +353,7 @@ var scCamInfoEl=document.getElementById('scCamInfo');
 
 var useNative='BarcodeDetector' in window;
 var CONFIRM_COUNT=3;
-var MAX_RESULTS=50;
+var MAX_RESULTS=100;
 
 /* ══════════════════════════════════════
    데이터 프리로드
@@ -386,32 +386,41 @@ function doSearch(){
   errorEl.style.display='none';statusEl.textContent='';
   if(!inventory){showError('데이터 로딩 중입니다.');return}
 
-  var qL=q.toLowerCase(),isB=/^[A-Za-z0-9]{10,}$/.test(q),res=[];
+  var qL=q.toLowerCase(),isB=/^[A-Za-z0-9]{10,}$/.test(q),res=[],totalMatch=0;
   for(var r=0;r<inventory.length;r++){
     var rec=inventory[r],cL=rec.c.toLowerCase(),nL=rec.m.toLowerCase();
     if(isB){if(cL!==qL)continue}else{if(cL.indexOf(qL)<0&&nL.indexOf(qL)<0)continue}
-    var tq=0,lo=[];for(var j=0;j<rec.l.length;j++){tq+=rec.l[j].q;lo.push({name:rec.l[j].n,qty:rec.l[j].q})}
-    res.push({itemCode:rec.c,brand:rec.b,itemName:rec.m,itemDesc:rec.d,
-      color:rec.r,size:rec.s,price:rec.v||'',itemLocation:rec.p||'',locations:lo,totalQty:tq});
-    if(res.length>=MAX_RESULTS)break;
-  }
-  if(isB&&res.length===0){
-    for(var r2=0;r2<inventory.length;r2++){
-      var rc=inventory[r2];if(rc.c.toLowerCase().indexOf(qL)<0&&rc.m.toLowerCase().indexOf(qL)<0)continue;
-      var t2=0,l2=[];for(var j2=0;j2<rc.l.length;j2++){t2+=rc.l[j2].q;l2.push({name:rc.l[j2].n,qty:rc.l[j2].q})}
-      res.push({itemCode:rc.c,brand:rc.b,itemName:rc.m,itemDesc:rc.d,
-        color:rc.r,size:rc.s,price:rc.v||'',itemLocation:rc.p||'',locations:l2,totalQty:t2});
-      if(res.length>=MAX_RESULTS)break;
+    totalMatch++;
+    if(res.length<MAX_RESULTS){
+      var tq=0,lo=[];for(var j=0;j<rec.l.length;j++){tq+=rec.l[j].q;lo.push({name:rec.l[j].n,qty:rec.l[j].q})}
+      res.push({itemCode:rec.c,brand:rec.b,itemName:rec.m,itemDesc:rec.d,
+        color:rec.r,size:rec.s,price:rec.v||'',itemLocation:rec.p||'',locations:lo,totalQty:tq});
     }
   }
-  renderResults(res);
+  if(isB&&res.length===0){
+    totalMatch=0;
+    for(var r2=0;r2<inventory.length;r2++){
+      var rc=inventory[r2];if(rc.c.toLowerCase().indexOf(qL)<0&&rc.m.toLowerCase().indexOf(qL)<0)continue;
+      totalMatch++;
+      if(res.length<MAX_RESULTS){
+        var t2=0,l2=[];for(var j2=0;j2<rc.l.length;j2++){t2+=rc.l[j2].q;l2.push({name:rc.l[j2].n,qty:rc.l[j2].q})}
+        res.push({itemCode:rc.c,brand:rc.b,itemName:rc.m,itemDesc:rc.d,
+          color:rc.r,size:rc.s,price:rc.v||'',itemLocation:rc.p||'',locations:l2,totalQty:t2});
+      }
+    }
+  }
+  renderResults(res,totalMatch);
 }
 
-function renderResults(data){
+function renderResults(data,totalMatch){
   if(!data.length){statusEl.textContent='검색 결과가 없습니다.';
     document.getElementById('selectAllBar').style.display='none';
     resultsEl.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-title">일치하는 품목이 없습니다</div></div>';return}
-  statusEl.textContent=data.length+'건 검색됨';
+  if(totalMatch>MAX_RESULTS){
+    statusEl.textContent=totalMatch+'건 이상 검색됨. 데이터는 '+MAX_RESULTS+'건까지만 보여집니다.';
+  }else{
+    statusEl.textContent=data.length+'건 검색됨';
+  }
   document.getElementById('selectAllBar').style.display='flex';
   document.getElementById('selectAllCb').checked=false;
   document.getElementById('selCount').textContent='';
@@ -801,7 +810,7 @@ var historyDepth=0;
 var skipNextPopstate=false;
 
 function histPush(){historyDepth++;history.pushState({app:historyDepth},'');}
-function histBack(){if(historyDepth>0){historyDepth--;history.back()}}
+function histBack(){if(historyDepth>0)history.back()}
 
 /* 뒤로가기 시 최상위 오버레이 닫기 */
 window.addEventListener('popstate',function(){
