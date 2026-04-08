@@ -62,6 +62,9 @@
       font-size:12px;font-weight:500;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2)}
     .loc-chip .loc-name{color:var(--text)}.loc-chip .loc-qty{color:var(--green);font-weight:700}
     .no-stock{color:var(--text2);font-size:12px;font-style:italic;margin-top:6px}
+    .price-line{font-size:17px;font-weight:700;color:var(--text);letter-spacing:-.3px}
+    .price-block{margin-bottom:8px}
+    .price-block .label{font-size:11px;font-weight:600;color:var(--text2)}
     .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:70px 20px;text-align:center}
     .empty-icon{font-size:44px;margin-bottom:14px;opacity:.5}
     .empty-title{font-size:15px;font-weight:600;margin-bottom:4px}.empty-desc{font-size:12px;color:var(--text2)}
@@ -373,7 +376,7 @@ function doSearch(){
     if(isB){if(cL!==qL)continue}else{if(cL.indexOf(qL)<0&&nL.indexOf(qL)<0)continue}
     var tq=0,lo=[];for(var j=0;j<rec.l.length;j++){tq+=rec.l[j].q;lo.push({name:rec.l[j].n,qty:rec.l[j].q})}
     res.push({itemCode:rec.c,brand:rec.b,itemName:rec.m,itemDesc:rec.d,
-      color:rec.r,size:rec.s,itemLocation:rec.p||'',locations:lo,totalQty:tq});
+      color:rec.r,size:rec.s,price:rec.v||'',itemLocation:rec.p||'',locations:lo,totalQty:tq});
     if(res.length>=MAX_RESULTS)break;
   }
   if(isB&&res.length===0){
@@ -381,7 +384,7 @@ function doSearch(){
       var rc=inventory[r2];if(rc.c.toLowerCase().indexOf(qL)<0&&rc.m.toLowerCase().indexOf(qL)<0)continue;
       var t2=0,l2=[];for(var j2=0;j2<rc.l.length;j2++){t2+=rc.l[j2].q;l2.push({name:rc.l[j2].n,qty:rc.l[j2].q})}
       res.push({itemCode:rc.c,brand:rc.b,itemName:rc.m,itemDesc:rc.d,
-        color:rc.r,size:rc.s,itemLocation:rc.p||'',locations:l2,totalQty:t2});
+        color:rc.r,size:rc.s,price:rc.v||'',itemLocation:rc.p||'',locations:l2,totalQty:t2});
       if(res.length>=MAX_RESULTS)break;
     }
   }
@@ -397,8 +400,9 @@ function renderResults(data){
     var d=data[i];
     h+='<div class="card"><div class="card-head"><span class="code">'+esc(d.itemCode)+'</span>';
     if(d.itemLocation)h+='<span class="loc-tag">📍 '+esc(d.itemLocation)+'</span>';
-    h+='<span class="total">총 '+d.totalQty+'개</span></div><div class="card-body">'+
-      field('브랜드',d.brand)+field('품목명',d.itemName)+(d.itemDesc?field('품목설명',d.itemDesc):'')+
+    h+='<span class="total">총 '+d.totalQty+'개</span></div><div class="card-body">';
+    if(d.price)h+='<div class="price-block"><span class="label">소비자가</span><div class="price-line">'+formatPrice(d.price)+'원</div></div>';
+    h+=field('브랜드',d.brand)+field('품목명',d.itemName)+(d.itemDesc?field('품목설명',d.itemDesc):'')+
       field('컬러',d.color)+field('사이즈',d.size);
     if(d.locations.length){h+='<div class="loc-row">';
       for(var j=0;j<d.locations.length;j++)h+='<div class="loc-chip"><span class="loc-name">'+esc(d.locations[j].name)+'</span><span class="loc-qty">'+d.locations[j].qty+'</span></div>';
@@ -411,6 +415,11 @@ function renderResults(data){
 function showError(m){errorEl.textContent='⚠️ '+m;errorEl.style.display='block'}
 function field(l,v){return'<div class="field"><span class="label">'+l+'</span><span class="value">'+esc(v||'-')+'</span></div>'}
 function esc(s){var d=document.createElement('span');d.textContent=s;return d.innerHTML}
+function formatPrice(v){
+  var n=String(v).replace(/[^0-9]/g,'');
+  if(!n)return v;
+  return n.replace(/\B(?=(\d{3})+(?!\d))/g,',');
+}
 
 /* ══════════════════════════════════════
    피드백
