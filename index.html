@@ -447,10 +447,12 @@ var scanMode='search'; /* 'search' | 'move' */
 var moveScannedItems={}; /* {code: qty} */
 var moveScannedTotal=0;
 var lastConfirmedCode=''; /* 이동모드: 마지막 확정 코드 (같은 바코드 연속 방지) */
+var emptyFrames=0; /* 바코드 미감지 연속 프레임 수 */
+var EMPTY_THRESHOLD=15; /* 이 횟수 이상 빈 프레임이어야 해제 (~1.5초) */
 
 function openScanner(mode){
   scanMode=mode||'search';
-  scanned=false;lastCode='';matchCount=0;torchOn=false;lastConfirmedCode='';
+  scanned=false;lastCode='';matchCount=0;torchOn=false;lastConfirmedCode='';emptyFrames=0;
   scReadEl.textContent='';scCamInfoEl.textContent='';
   document.getElementById('btnTorch').classList.remove('active');
   document.getElementById('scannerOverlay').classList.add('show');
@@ -482,7 +484,7 @@ function resumeMoveScan(){
   /* 리뷰에서 스캐너로 복귀 (기존 스캔 데이터 유지) */
   document.getElementById('reviewOverlay').classList.remove('show');
   scanMode='move';
-  scanned=false;lastCode='';matchCount=0;torchOn=false;lastConfirmedCode='';
+  scanned=false;lastCode='';matchCount=0;torchOn=false;lastConfirmedCode='';emptyFrames=0;
   scReadEl.textContent='';scCamInfoEl.textContent='';
   document.getElementById('btnTorch').classList.remove('active');
   document.getElementById('scTitle').textContent='📦 상품 이동 스캔';
@@ -584,8 +586,8 @@ function startAndroidScan(){if(scanTimer)clearInterval(scanTimer);
     var vw=scanVideo.videoWidth,vh=scanVideo.videoHeight;if(!vw||!vh)return;
     var gw=vw*.9,gh=gw/1.8,gx=(vw-gw)/2,gy=(vh-gh)/2;
     cropCanvas.width=gw;cropCanvas.height=gh;cropCtx.drawImage(scanVideo,gx,gy,gw,gh,0,0,gw,gh);
-    nativeDetector.detect(cropCanvas).then(function(r){if(r.length>0)onCodeRead(r[0].rawValue);
-      else if(matchCount>0||lastConfirmedCode){matchCount=0;lastCode='';lastConfirmedCode='';scReadEl.textContent=''}}).catch(function(){});
+    nativeDetector.detect(cropCanvas).then(function(r){if(r.length>0){emptyFrames=0;onCodeRead(r[0].rawValue)}
+      else{emptyFrames++;if(emptyFrames>=EMPTY_THRESHOLD&&(matchCount>0||lastConfirmedCode)){matchCount=0;lastCode='';lastConfirmedCode='';scReadEl.textContent='';emptyFrames=0}}}).catch(function(){});
   },100);
 }
 function stopAndroid(){if(scanTimer){clearInterval(scanTimer);scanTimer=null}
@@ -607,7 +609,7 @@ function initIOSScanner(){
   var noDetectFrames=0;
   Quagga.onProcessed(function(result){
     if(result&&result.codeResult&&result.codeResult.code){noDetectFrames=0}
-    else{noDetectFrames++;if(noDetectFrames>8&&lastConfirmedCode){lastConfirmedCode='';noDetectFrames=0}}
+    else{noDetectFrames++;if(noDetectFrames>=15&&lastConfirmedCode){lastConfirmedCode='';noDetectFrames=0}}
   });
 }
 function restartQuagga(idx){try{Quagga.stop()}catch(e){}var cam=allCameras[idx];
