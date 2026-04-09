@@ -30,6 +30,33 @@
       display:inline-flex;align-items:center;gap:3px;flex-shrink:0}
     .hdr-btn:active{background:var(--card)}
     .hdr-btn.move{background:rgba(251,191,36,.15);border-color:rgba(251,191,36,.3);color:var(--orange)}
+    .hdr-btn.search{background:rgba(79,140,255,.15);border-color:rgba(79,140,255,.3);color:var(--accent)}
+
+    /* ── 상세 검색 오버레이 ── */
+    .adv-overlay{position:fixed;inset:0;z-index:200;background:var(--bg);display:none;flex-direction:column}
+    .adv-overlay.show{display:flex}
+    .adv-top{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;
+      padding-top:max(14px,env(safe-area-inset-top))}
+    .adv-top h2{font-size:17px;font-weight:700}
+    .adv-close{background:var(--surface);border:1px solid var(--border);color:var(--text);
+      height:34px;padding:0 14px;border-radius:10px;font-size:13px;font-family:var(--font);cursor:pointer}
+    .adv-body{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
+    .adv-field{margin-bottom:14px}
+    .adv-field label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px}
+    .adv-field select{width:100%;height:42px;padding:0 12px;border:1.5px solid var(--border);
+      border-radius:10px;background:var(--surface);color:var(--text);font-size:16px;
+      font-family:var(--font);outline:none;-webkit-appearance:none;appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239ba1b5' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:right 12px center}
+    .adv-field select:focus{border-color:var(--accent)}
+    .adv-bottom{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;
+      padding-bottom:max(12px,env(safe-area-inset-bottom))}
+    .adv-bottom button{flex:1;height:46px;border:none;border-radius:14px;font-size:15px;
+      font-weight:700;font-family:var(--font);cursor:pointer}
+    .btn-adv-reset{background:var(--surface);color:var(--text);border:1px solid var(--border)!important}
+    .btn-adv-search{background:var(--accent);color:#fff}
+    .btn-adv-search:active{background:var(--accent2)}
+    .adv-active-count{font-size:11px;color:var(--accent);margin-top:2px}
     .header p{font-size:11px;color:var(--text2);margin-top:2px}
     .data-status{font-size:11px;color:var(--green);margin-top:1px}
     .data-status.ld{color:var(--accent)}.data-status.er{color:var(--red)}
@@ -255,6 +282,7 @@
     <div class="header-row">
       <h1>📦 재고 조회</h1>
       <div class="header-btns">
+        <button class="hdr-btn search" onclick="openAdvSearch()">🔍 상세 검색</button>
         <button class="hdr-btn move" onclick="startMoveMode()">📦 상품 이동</button>
         <button class="hdr-btn" onclick="loadData(true)">🔄 새로고침</button>
       </div>
@@ -279,6 +307,29 @@
   <div class="results" id="results">
     <div class="empty"><div class="empty-icon">🔍</div><div class="empty-title">검색어를 입력하세요</div>
       <div class="empty-desc">품목코드 일부 또는 품목명으로 검색<br>📷 바코드 스캔도 가능합니다</div></div>
+  </div>
+</div>
+
+<!-- ══ 상세 검색 오버레이 ══ -->
+<div class="adv-overlay" id="advOverlay">
+  <div class="adv-top">
+    <h2>🔍 상세 검색</h2>
+    <button class="adv-close" onclick="histBack()">← 뒤로</button>
+  </div>
+  <div class="adv-body">
+    <div class="adv-field"><label>브랜드</label><select id="af-brand"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>품목명</label><select id="af-name"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>품목종류</label><select id="af-type"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>품목세분류</label><select id="af-subtype"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>성별</label><select id="af-gender"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>컬러</label><select id="af-color"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>사이즈</label><select id="af-size"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>컬렉션</label><select id="af-collection"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>상품위치</label><select id="af-location"><option value="">전체</option></select></div>
+  </div>
+  <div class="adv-bottom">
+    <button class="btn-adv-reset" onclick="resetAdvFilters()">초기화</button>
+    <button class="btn-adv-search" onclick="doAdvSearch()">검색</button>
   </div>
 </div>
 
@@ -592,6 +643,106 @@ function showCopyToast(el){
   var orig=el.textContent;
   el.textContent='✓ 복사됨';el.style.background='rgba(52,211,153,.25)';
   setTimeout(function(){el.textContent=orig;el.style.background=''},1000);
+}
+
+/* ══════════════════════════════════════
+   상세 검색
+   ══════════════════════════════════════ */
+
+var ADV_FILTERS=[
+  {id:'af-brand',key:'b',label:'브랜드'},
+  {id:'af-name',key:'m',label:'품목명'},
+  {id:'af-type',key:'t',label:'품목종류'},
+  {id:'af-subtype',key:'u',label:'품목세분류'},
+  {id:'af-gender',key:'g',label:'성별'},
+  {id:'af-color',key:'r',label:'컬러'},
+  {id:'af-size',key:'s',label:'사이즈'},
+  {id:'af-collection',key:'k',label:'컬렉션'},
+  {id:'af-location',key:'p',label:'상품위치'}
+];
+
+function openAdvSearch(){
+  if(!inventory){showError('데이터 로딩 중입니다.');return}
+  buildFilterOptions();
+  document.getElementById('advOverlay').classList.add('show');
+  histPush();
+}
+
+function closeAdvSearch(){
+  document.getElementById('advOverlay').classList.remove('show');
+}
+
+function buildFilterOptions(){
+  if(!inventory)return;
+  for(var f=0;f<ADV_FILTERS.length;f++){
+    var filter=ADV_FILTERS[f];
+    var sel=document.getElementById(filter.id);
+    var curVal=sel.value;
+    var vals={};
+    for(var i=0;i<inventory.length;i++){
+      var v=inventory[i][filter.key]||'';
+      if(v)vals[v]=true;
+    }
+    var sorted=Object.keys(vals).sort();
+    var h='<option value="">전체</option>';
+    for(var j=0;j<sorted.length;j++){
+      h+='<option value="'+esc(sorted[j])+'">'+esc(sorted[j])+'</option>';
+    }
+    sel.innerHTML=h;
+    if(curVal)sel.value=curVal;
+  }
+}
+
+function resetAdvFilters(){
+  for(var f=0;f<ADV_FILTERS.length;f++){
+    document.getElementById(ADV_FILTERS[f].id).value='';
+  }
+}
+
+function doAdvSearch(){
+  if(!inventory)return;
+  var filters=[];
+  for(var f=0;f<ADV_FILTERS.length;f++){
+    var val=document.getElementById(ADV_FILTERS[f].id).value;
+    if(val)filters.push({key:ADV_FILTERS[f].key,val:val});
+  }
+  if(filters.length===0){showError('검색 조건을 하나 이상 선택해 주세요.');return}
+
+  var res=[],totalMatch=0;
+  for(var i=0;i<inventory.length;i++){
+    var rec=inventory[i],match=true;
+    for(var fi=0;fi<filters.length;fi++){
+      if((rec[filters[fi].key]||'')!==filters[fi].val){match=false;break}
+    }
+    if(!match)continue;
+    totalMatch++;
+    if(res.length<MAX_RESULTS){
+      var tq=0,lo=[],rl=rec.l||[];
+      for(var j=0;j<rl.length;j++){tq+=rl[j].q;lo.push({name:rl[j].n,qty:rl[j].q})}
+      res.push({itemCode:rec.c,brand:rec.b||'',itemName:rec.m,itemDesc:rec.d||'',
+        color:rec.r||'',size:rec.s||'',price:rec.v||'',itemLocation:rec.p||'',
+        itemType:rec.t||'',itemSubtype:rec.u||'',gender:rec.g||'',collection:rec.k||'',
+        locations:lo,totalQty:tq});
+    }
+  }
+
+  closeAdvSearch();
+  /* history 정리 */
+  if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back()}
+
+  errorEl.style.display='none';
+  qEl.value='';
+  renderResults(res,totalMatch);
+
+  /* 활성 필터 수 표시 */
+  var activeNames=[];
+  for(var f2=0;f2<filters.length;f2++){
+    for(var af=0;af<ADV_FILTERS.length;af++){
+      if(ADV_FILTERS[af].key===filters[f2].key){activeNames.push(ADV_FILTERS[af].label+': '+filters[f2].val);break}
+    }
+  }
+  statusEl.textContent=(totalMatch>MAX_RESULTS?totalMatch+'건 이상 검색됨. '+MAX_RESULTS+'건까지만 표시':res.length+'건 검색됨');
+  if(activeNames.length)statusEl.textContent+=' ['+activeNames.join(', ')+']';
 }
 
 /* ══════════════════════════════════════
@@ -939,11 +1090,14 @@ window.addEventListener('popstate',function(){
   if(skipNextPopstate){skipNextPopstate=false;return}
   if(historyDepth>0)historyDepth--;
 
+  var adv=document.getElementById('advOverlay');
   var modal=document.getElementById('locModal');
   var review=document.getElementById('reviewOverlay');
   var scanner=document.getElementById('scannerOverlay');
 
-  if(modal.classList.contains('show')){
+  if(adv.classList.contains('show')){
+    adv.classList.remove('show');
+  }else if(modal.classList.contains('show')){
     modal.classList.remove('show');
   }else if(review.classList.contains('show')){
     if(moveScannedTotal>0){
