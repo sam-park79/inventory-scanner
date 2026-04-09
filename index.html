@@ -117,6 +117,12 @@
       font-size:12px;font-weight:500;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2)}
     .loc-chip .loc-name{color:var(--text)}.loc-chip .loc-qty{color:var(--green);font-weight:700}
     .no-stock{color:var(--text2);font-size:12px;font-style:italic;margin-top:6px}
+    .gender-tag{font-size:12px;font-weight:600;padding:1px 8px;border-radius:4px;display:inline-block}
+    .gender-man{color:#5b8def;background:rgba(91,141,239,.1)}
+    .gender-woman{color:#ef6b8a;background:rgba(239,107,138,.1)}
+    .gender-unisex{color:#4abe7e;background:rgba(74,190,126,.1)}
+    .gender-kids{color:#a87edb;background:rgba(168,126,219,.1)}
+    .gender-default{color:var(--text2);background:var(--surface)}
     .var-btn{background:rgba(79,140,255,.12);border:1px solid rgba(79,140,255,.2);color:var(--accent);
       font-size:10px;font-weight:600;font-family:var(--font);padding:2px 8px;border-radius:6px;
       cursor:pointer;margin-left:6px;vertical-align:middle}
@@ -529,7 +535,7 @@ function doSearch(){
     if(res.length<MAX_RESULTS){
       var tq=0,lo=[],rl=rec.l||[];for(var j=0;j<rl.length;j++){tq+=rl[j].q;lo.push({name:rl[j].n,qty:rl[j].q})}
       res.push({itemCode:rec.c,brand:rec.b||'',itemName:rec.m,itemDesc:rec.d||'',
-        color:rec.r||'',size:rec.s||'',price:rec.v||'',itemLocation:rec.p||'',locations:lo,totalQty:tq});
+        color:rec.r||'',size:rec.s||'',price:rec.v||'',itemLocation:rec.p||'',gender:rec.g||'',locations:lo,totalQty:tq});
     }
   }
   if(isB&&res.length===0){
@@ -540,7 +546,7 @@ function doSearch(){
       if(res.length<MAX_RESULTS){
         var t2=0,l2=[],rl2=rc.l||[];for(var j2=0;j2<rl2.length;j2++){t2+=rl2[j2].q;l2.push({name:rl2[j2].n,qty:rl2[j2].q})}
         res.push({itemCode:rc.c,brand:rc.b||'',itemName:rc.m,itemDesc:rc.d||'',
-          color:rc.r||'',size:rc.s||'',price:rc.v||'',itemLocation:rc.p||'',locations:l2,totalQty:t2});
+          color:rc.r||'',size:rc.s||'',price:rc.v||'',itemLocation:rc.p||'',gender:rc.g||'',locations:l2,totalQty:t2});
       }
     }
   }
@@ -567,6 +573,7 @@ function renderResults(data,totalMatch){
     h+='<span class="total">총 '+d.totalQty+'개</span></div><div class="card-body">';
     if(d.price)h+='<span class="price-tag"><span class="pt-label">소비자가</span><span class="pt-value">'+formatPrice(d.price)+'원</span></span>';
     h+=field('브랜드',d.brand)+field('품목명',d.itemName)+(d.itemDesc?field('품목설명',d.itemDesc):'');
+    if(d.gender)h+='<div class="field"><span class="label">성별</span><span class="gender-tag '+genderClass(d.gender)+'">'+esc(d.gender)+'</span></div>';
     var vc=hasVariants(d.itemName,d.itemCode,d.color,'color');
     var vs=hasVariants(d.itemName,d.itemCode,d.size,'size');
     h+='<div class="field"><span class="label">컬러</span><span class="value">'+esc(d.color||'-');
@@ -671,6 +678,16 @@ function formatPrice(v){
   var n=String(v).replace(/[^0-9]/g,'');
   if(!n)return v;
   return n.replace(/\B(?=(\d{3})+(?!\d))/g,',');
+}
+
+function genderClass(g){
+  if(!g)return'gender-default';
+  var l=g.toLowerCase();
+  if(l==='man'||l==='남성')return'gender-man';
+  if(l==='woman'||l==='여성')return'gender-woman';
+  if(l==='unisex'||l==='유니섹스')return'gender-unisex';
+  if(l==='kids'||l==='아동')return'gender-kids';
+  return'gender-default';
 }
 
 function copyCode(el){
@@ -958,7 +975,7 @@ function doAdvSearch(){
       var tq=0,lo=[],rl=rec.l||[];
       for(var j=0;j<rl.length;j++){tq+=rl[j].q;lo.push({name:rl[j].n,qty:rl[j].q})}
       res.push({itemCode:rec.c,brand:rec.b||'',itemName:rec.m,itemDesc:rec.d||'',
-        color:rec.r||'',size:rec.s||'',price:rec.v||'',itemLocation:rec.p||'',
+        color:rec.r||'',size:rec.s||'',price:rec.v||'',itemLocation:rec.p||'',gender:rec.g||'',
         locations:lo,totalQty:tq});
     }
   }
