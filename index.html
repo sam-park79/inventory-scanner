@@ -57,6 +57,29 @@
     .btn-adv-search{background:var(--accent);color:#fff}
     .btn-adv-search:active{background:var(--accent2)}
     .adv-active-count{font-size:11px;color:var(--accent);margin-top:2px}
+
+    /* 자동완성 */
+    .adv-auto{position:relative}
+    .adv-auto input[type="text"]{width:100%;height:42px;padding:0 12px;border:1.5px solid var(--border);
+      border-radius:10px;background:var(--surface);color:var(--text);font-size:16px;
+      font-family:var(--font);outline:none}
+    .adv-auto input[type="text"]:focus{border-color:var(--accent)}
+    .adv-auto-sel{display:none;margin-top:6px}
+    .adv-auto-sel.show{display:flex;align-items:center;gap:6px}
+    .adv-auto-sel .sel-badge{flex:1;padding:8px 12px;background:rgba(79,140,255,.1);border:1px solid rgba(79,140,255,.2);
+      border-radius:8px;font-size:13px;color:var(--accent);font-weight:500;word-break:break-all}
+    .adv-auto-sel .sel-clear{width:30px;height:30px;border:none;border-radius:8px;
+      background:rgba(248,113,113,.15);color:var(--red);font-size:14px;cursor:pointer;flex-shrink:0;
+      display:flex;align-items:center;justify-content:center;font-family:var(--font)}
+    .adv-auto-list{display:none;position:absolute;left:0;right:0;top:46px;z-index:10;
+      background:var(--card);border:1px solid var(--border);border-radius:10px;
+      max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+    .adv-auto-list.show{display:block}
+    .adv-auto-item{padding:10px 14px;font-size:14px;color:var(--text);cursor:pointer;
+      border-bottom:1px solid var(--border)}
+    .adv-auto-item:last-child{border-bottom:none}
+    .adv-auto-item:active{background:rgba(79,140,255,.15)}
+    .adv-auto-item em{font-style:normal;color:var(--accent);font-weight:700}
     .header p{font-size:11px;color:var(--text2);margin-top:2px}
     .data-status{font-size:11px;color:var(--green);margin-top:1px}
     .data-status.ld{color:var(--accent)}.data-status.er{color:var(--red)}
@@ -317,15 +340,28 @@
     <button class="adv-close" onclick="histBack()">← 뒤로</button>
   </div>
   <div class="adv-body">
-    <div class="adv-field"><label>브랜드</label><select id="af-brand"><option value="">전체</option></select></div>
-    <div class="adv-field"><label>품목명</label><select id="af-name"><option value="">전체</option></select></div>
-    <div class="adv-field"><label>품목종류</label><select id="af-type"><option value="">전체</option></select></div>
-    <div class="adv-field"><label>품목세분류</label><select id="af-subtype"><option value="">전체</option></select></div>
-    <div class="adv-field"><label>성별</label><select id="af-gender"><option value="">전체</option></select></div>
-    <div class="adv-field"><label>컬러</label><select id="af-color"><option value="">전체</option></select></div>
-    <div class="adv-field"><label>사이즈</label><select id="af-size"><option value="">전체</option></select></div>
-    <div class="adv-field"><label>컬렉션</label><select id="af-collection"><option value="">전체</option></select></div>
-    <div class="adv-field"><label>상품위치</label><select id="af-location"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>브랜드</label>
+      <div class="adv-auto" id="aw-brand">
+        <input type="text" id="af-brand-input" placeholder="브랜드 검색..." oninput="onAutoInput('brand')" autocomplete="off" autocorrect="off">
+        <input type="hidden" id="af-brand">
+        <div class="adv-auto-sel" id="af-brand-sel"></div>
+        <div class="adv-auto-list" id="af-brand-list"></div>
+      </div>
+    </div>
+    <div class="adv-field"><label>품목종류</label><select id="af-type" onchange="buildFilterOptions()"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>품목세분류</label><select id="af-subtype" onchange="buildFilterOptions()"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>성별</label><select id="af-gender" onchange="buildFilterOptions()"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>컬러</label>
+      <div class="adv-auto" id="aw-color">
+        <input type="text" id="af-color-input" placeholder="컬러 검색..." oninput="onAutoInput('color')" autocomplete="off" autocorrect="off">
+        <input type="hidden" id="af-color">
+        <div class="adv-auto-sel" id="af-color-sel"></div>
+        <div class="adv-auto-list" id="af-color-list"></div>
+      </div>
+    </div>
+    <div class="adv-field"><label>사이즈</label><select id="af-size" onchange="buildFilterOptions()"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>컬렉션</label><select id="af-collection" onchange="buildFilterOptions()"><option value="">전체</option></select></div>
+    <div class="adv-field"><label>상품위치</label><select id="af-location" onchange="buildFilterOptions()"><option value="">전체</option></select></div>
   </div>
   <div class="adv-bottom">
     <button class="btn-adv-reset" onclick="resetAdvFilters()">초기화</button>
@@ -650,16 +686,34 @@ function showCopyToast(el){
    ══════════════════════════════════════ */
 
 var ADV_FILTERS=[
-  {id:'af-brand',key:'b',label:'브랜드'},
-  {id:'af-name',key:'m',label:'품목명'},
+  {id:'af-brand',key:'b',label:'브랜드',auto:true,autoId:'brand'},
   {id:'af-type',key:'t',label:'품목종류'},
   {id:'af-subtype',key:'u',label:'품목세분류'},
   {id:'af-gender',key:'g',label:'성별'},
-  {id:'af-color',key:'r',label:'컬러'},
+  {id:'af-color',key:'r',label:'컬러',auto:true,autoId:'color',line2:true},
   {id:'af-size',key:'s',label:'사이즈'},
   {id:'af-collection',key:'k',label:'컬렉션'},
   {id:'af-location',key:'p',label:'상품위치'}
 ];
+
+/** 컬러: 두 번째 줄(M열)만 추출. \n 없으면 M열 비어있는 것 → 빈 문자열 반환 */
+function getLine2(val){
+  if(!val)return '';
+  var idx=val.indexOf('\n');
+  if(idx>=0)return val.substring(idx+1).trim();
+  return ''; /* \n 없음 = M열 비어있음 */
+}
+
+function getFilterVal(rec,filter){
+  var v=rec[filter.key]||'';
+  return filter.line2?getLine2(v):v;
+}
+
+/** 현재 필터값 읽기 (auto/select 통합) */
+function getAdvVal(filter){
+  if(filter.auto)return document.getElementById(filter.id).value;
+  return document.getElementById(filter.id).value;
+}
 
 function openAdvSearch(){
   if(!inventory){showError('데이터 로딩 중입니다.');return}
@@ -670,41 +724,154 @@ function openAdvSearch(){
 
 function closeAdvSearch(){
   document.getElementById('advOverlay').classList.remove('show');
+  /* 자동완성 드롭다운 닫기 */
+  var lists=document.querySelectorAll('.adv-auto-list');
+  for(var i=0;i<lists.length;i++)lists[i].classList.remove('show');
 }
 
+/** 연동 드롭다운 + 자동완성 옵션 재구성 */
 function buildFilterOptions(){
   if(!inventory)return;
   for(var f=0;f<ADV_FILTERS.length;f++){
     var filter=ADV_FILTERS[f];
+    if(filter.auto)continue; /* 자동완성은 입력 시 실시간 갱신 */
+
     var sel=document.getElementById(filter.id);
     var curVal=sel.value;
+
+    var otherFilters=[];
+    for(var o=0;o<ADV_FILTERS.length;o++){
+      if(o===f)continue;
+      var ov=getAdvVal(ADV_FILTERS[o]);
+      if(ov)otherFilters.push({filter:ADV_FILTERS[o],val:ov});
+    }
+
     var vals={};
     for(var i=0;i<inventory.length;i++){
-      var v=inventory[i][filter.key]||'';
+      var rec=inventory[i],match=true;
+      for(var oi=0;oi<otherFilters.length;oi++){
+        if(getFilterVal(rec,otherFilters[oi].filter)!==otherFilters[oi].val){match=false;break}
+      }
+      if(!match)continue;
+      var v=getFilterVal(rec,filter);
       if(v)vals[v]=true;
     }
+
     var sorted=Object.keys(vals).sort();
     var h='<option value="">전체</option>';
     for(var j=0;j<sorted.length;j++){
       h+='<option value="'+esc(sorted[j])+'">'+esc(sorted[j])+'</option>';
     }
     sel.innerHTML=h;
-    if(curVal)sel.value=curVal;
+    if(curVal&&vals[curVal])sel.value=curVal;
+    else sel.value='';
   }
+}
+
+/** 자동완성: 다른 필터 조건으로 필터링된 데이터에서 입력 텍스트에 매칭되는 값 표시 */
+function onAutoInput(autoId){
+  var filter=null;
+  for(var f=0;f<ADV_FILTERS.length;f++){if(ADV_FILTERS[f].autoId===autoId){filter=ADV_FILTERS[f];break}}
+  if(!filter||!inventory)return;
+
+  var input=document.getElementById(filter.id+'-input');
+  var list=document.getElementById(filter.id+'-list');
+  var q=input.value.trim().toLowerCase();
+
+  if(!q){list.classList.remove('show');list.innerHTML='';return}
+
+  /* 다른 필터 조건 수집 */
+  var otherFilters=[];
+  for(var o=0;o<ADV_FILTERS.length;o++){
+    if(ADV_FILTERS[o].id===filter.id)continue;
+    var ov=getAdvVal(ADV_FILTERS[o]);
+    if(ov)otherFilters.push({filter:ADV_FILTERS[o],val:ov});
+  }
+
+  /* 매칭 값 수집 */
+  var vals={};
+  for(var i=0;i<inventory.length;i++){
+    var rec=inventory[i],match=true;
+    for(var oi=0;oi<otherFilters.length;oi++){
+      if(getFilterVal(rec,otherFilters[oi].filter)!==otherFilters[oi].val){match=false;break}
+    }
+    if(!match)continue;
+    var v=getFilterVal(rec,filter);
+    if(v&&v.toLowerCase().indexOf(q)>=0)vals[v]=true;
+  }
+
+  var sorted=Object.keys(vals).sort();
+  if(!sorted.length){list.classList.remove('show');list.innerHTML='';return}
+
+  var h='';
+  for(var j=0;j<sorted.length&&j<30;j++){
+    /* 매칭 부분 하이라이트 */
+    var orig=sorted[j];
+    var lw=orig.toLowerCase();
+    var mi=lw.indexOf(q);
+    var highlighted=esc(orig.substring(0,mi))+'<em>'+esc(orig.substring(mi,mi+q.length))+'</em>'+esc(orig.substring(mi+q.length));
+    h+='<div class="adv-auto-item" data-auto="'+autoId+'" data-val="'+esc(orig)+'">'+highlighted+'</div>';
+  }
+  if(sorted.length>30)h+='<div class="adv-auto-item" style="color:var(--text2)">...외 '+(sorted.length-30)+'건</div>';
+  list.innerHTML=h;
+  list.classList.add('show');
+}
+
+function selectAutoVal(autoId,val){
+  var filter=null;
+  for(var f=0;f<ADV_FILTERS.length;f++){if(ADV_FILTERS[f].autoId===autoId){filter=ADV_FILTERS[f];break}}
+  if(!filter)return;
+
+  document.getElementById(filter.id).value=val;
+  document.getElementById(filter.id+'-input').value='';
+  document.getElementById(filter.id+'-list').classList.remove('show');
+  document.getElementById(filter.id+'-list').innerHTML='';
+
+  var selEl=document.getElementById(filter.id+'-sel');
+  selEl.innerHTML='<span class="sel-badge">'+esc(val)+'</span><button class="sel-clear" onclick="clearAutoVal(\''+autoId+'\')">✕</button>';
+  selEl.classList.add('show');
+  document.getElementById(filter.id+'-input').style.display='none';
+
+  buildFilterOptions();
+}
+
+function clearAutoVal(autoId){
+  var filter=null;
+  for(var f=0;f<ADV_FILTERS.length;f++){if(ADV_FILTERS[f].autoId===autoId){filter=ADV_FILTERS[f];break}}
+  if(!filter)return;
+
+  document.getElementById(filter.id).value='';
+  document.getElementById(filter.id+'-sel').classList.remove('show');
+  document.getElementById(filter.id+'-sel').innerHTML='';
+  document.getElementById(filter.id+'-input').style.display='';
+  document.getElementById(filter.id+'-input').value='';
+
+  buildFilterOptions();
 }
 
 function resetAdvFilters(){
   for(var f=0;f<ADV_FILTERS.length;f++){
-    document.getElementById(ADV_FILTERS[f].id).value='';
+    var fi=ADV_FILTERS[f];
+    if(fi.auto){
+      document.getElementById(fi.id).value='';
+      document.getElementById(fi.id+'-input').value='';
+      document.getElementById(fi.id+'-input').style.display='';
+      document.getElementById(fi.id+'-sel').classList.remove('show');
+      document.getElementById(fi.id+'-sel').innerHTML='';
+      document.getElementById(fi.id+'-list').classList.remove('show');
+    }else{
+      document.getElementById(fi.id).value='';
+    }
   }
+  buildFilterOptions();
 }
 
 function doAdvSearch(){
   if(!inventory)return;
   var filters=[];
   for(var f=0;f<ADV_FILTERS.length;f++){
-    var val=document.getElementById(ADV_FILTERS[f].id).value;
-    if(val)filters.push({key:ADV_FILTERS[f].key,val:val});
+    var val=getAdvVal(ADV_FILTERS[f]);
+    if(val)filters.push({filter:ADV_FILTERS[f],val:val});
   }
   if(filters.length===0){showError('검색 조건을 하나 이상 선택해 주세요.');return}
 
@@ -712,7 +879,7 @@ function doAdvSearch(){
   for(var i=0;i<inventory.length;i++){
     var rec=inventory[i],match=true;
     for(var fi=0;fi<filters.length;fi++){
-      if((rec[filters[fi].key]||'')!==filters[fi].val){match=false;break}
+      if(getFilterVal(rec,filters[fi].filter)!==filters[fi].val){match=false;break}
     }
     if(!match)continue;
     totalMatch++;
@@ -721,29 +888,33 @@ function doAdvSearch(){
       for(var j=0;j<rl.length;j++){tq+=rl[j].q;lo.push({name:rl[j].n,qty:rl[j].q})}
       res.push({itemCode:rec.c,brand:rec.b||'',itemName:rec.m,itemDesc:rec.d||'',
         color:rec.r||'',size:rec.s||'',price:rec.v||'',itemLocation:rec.p||'',
-        itemType:rec.t||'',itemSubtype:rec.u||'',gender:rec.g||'',collection:rec.k||'',
         locations:lo,totalQty:tq});
     }
   }
 
   closeAdvSearch();
-  /* history 정리 */
   if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back()}
-
-  errorEl.style.display='none';
-  qEl.value='';
+  errorEl.style.display='none';qEl.value='';
   renderResults(res,totalMatch);
 
-  /* 활성 필터 수 표시 */
   var activeNames=[];
-  for(var f2=0;f2<filters.length;f2++){
-    for(var af=0;af<ADV_FILTERS.length;af++){
-      if(ADV_FILTERS[af].key===filters[f2].key){activeNames.push(ADV_FILTERS[af].label+': '+filters[f2].val);break}
-    }
-  }
+  for(var f2=0;f2<filters.length;f2++)activeNames.push(filters[f2].filter.label+': '+filters[f2].val);
   statusEl.textContent=(totalMatch>MAX_RESULTS?totalMatch+'건 이상 검색됨. '+MAX_RESULTS+'건까지만 표시':res.length+'건 검색됨');
   if(activeNames.length)statusEl.textContent+=' ['+activeNames.join(', ')+']';
 }
+
+/* 자동완성 항목 클릭 (이벤트 위임) */
+document.addEventListener('click',function(e){
+  var item=e.target.closest('.adv-auto-item');
+  if(item&&item.dataset.auto&&item.dataset.val){
+    selectAutoVal(item.dataset.auto,item.dataset.val);return;
+  }
+  /* 자동완성 외부 클릭 시 목록 닫기 */
+  if(!e.target.closest('.adv-auto')){
+    var lists=document.querySelectorAll('.adv-auto-list');
+    for(var i=0;i<lists.length;i++)lists[i].classList.remove('show');
+  }
+});
 
 /* ══════════════════════════════════════
    피드백
