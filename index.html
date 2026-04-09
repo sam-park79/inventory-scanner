@@ -40,14 +40,16 @@
     .adv-top h2{font-size:17px;font-weight:700}
     .adv-close{background:var(--surface);border:1px solid var(--border);color:var(--text);
       height:34px;padding:0 14px;border-radius:10px;font-size:13px;font-family:var(--font);cursor:pointer}
-    .adv-body{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
-    .adv-field{margin-bottom:14px}
-    .adv-field label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:5px}
-    .adv-field select{width:100%;height:42px;padding:0 12px;border:1.5px solid var(--border);
-      border-radius:10px;background:var(--surface);color:var(--text);font-size:16px;
+    .adv-body{flex:1;overflow-y:auto;padding:12px 16px;-webkit-overflow-scrolling:touch}
+    .adv-row{display:flex;gap:10px;margin-bottom:10px}
+    .adv-row .adv-field{flex:1;margin-bottom:0}
+    .adv-field{margin-bottom:10px}
+    .adv-field label{display:block;font-size:11px;font-weight:600;color:var(--text2);margin-bottom:3px}
+    .adv-field select{width:100%;height:38px;padding:0 10px;border:1.5px solid var(--border);
+      border-radius:10px;background:var(--surface);color:var(--text);font-size:14px;
       font-family:var(--font);outline:none;-webkit-appearance:none;appearance:none;
       background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239ba1b5' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-      background-repeat:no-repeat;background-position:right 12px center}
+      background-repeat:no-repeat;background-position:right 10px center}
     .adv-field select:focus{border-color:var(--accent)}
     .adv-bottom{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;
       padding-bottom:max(12px,env(safe-area-inset-bottom))}
@@ -98,6 +100,7 @@
     .btn-scan{background:#7c3aed;padding:0 12px;font-size:17px}.btn-scan:active{background:#6d28d9}
 
     .status{padding:6px 16px;font-size:13px;color:var(--text2)}
+    .filter-desc{font-size:12px;color:var(--accent);margin-top:3px;line-height:1.4}
     .results{flex:1;overflow-y:auto;padding:0 16px 100px;-webkit-overflow-scrolling:touch}
     .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;position:relative}
     .card-head{display:flex;align-items:center;padding:12px 14px 8px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:6px}
@@ -339,7 +342,7 @@
     <h2>🔍 상세 검색</h2>
     <button class="adv-close" onclick="histBack()">← 뒤로</button>
   </div>
-  <div class="adv-body">
+  <div class="adv-body" id="advBody">
     <div class="adv-field"><label>브랜드</label>
       <div class="adv-auto" id="aw-brand">
         <input type="text" id="af-brand-input" placeholder="브랜드 검색..." oninput="onAutoInput('brand')" autocomplete="off" autocorrect="off">
@@ -348,20 +351,26 @@
         <div class="adv-auto-list" id="af-brand-list"></div>
       </div>
     </div>
-    <div class="adv-field"><label>품목종류</label><select id="af-type" onchange="buildFilterOptions()"><option value="">전체</option></select></div>
-    <div class="adv-field"><label>품목세분류</label><select id="af-subtype" onchange="buildFilterOptions()"><option value="">전체</option></select></div>
-    <div class="adv-field"><label>성별</label><select id="af-gender" onchange="buildFilterOptions()"><option value="">전체</option></select></div>
-    <div class="adv-field"><label>컬러</label>
-      <div class="adv-auto" id="aw-color">
-        <input type="text" id="af-color-input" placeholder="컬러 검색..." oninput="onAutoInput('color')" autocomplete="off" autocorrect="off">
-        <input type="hidden" id="af-color">
-        <div class="adv-auto-sel" id="af-color-sel"></div>
-        <div class="adv-auto-list" id="af-color-list"></div>
+    <div class="adv-row">
+      <div class="adv-field"><label>품목종류</label><select id="af-type" onchange="onAdvSelect(this)"><option value="">전체</option></select></div>
+      <div class="adv-field"><label>품목세분류</label><select id="af-subtype" onchange="onAdvSelect(this)"><option value="">전체</option></select></div>
+    </div>
+    <div class="adv-row">
+      <div class="adv-field"><label>성별</label><select id="af-gender" onchange="onAdvSelect(this)"><option value="">전체</option></select></div>
+      <div class="adv-field"><label>컬러</label>
+        <div class="adv-auto" id="aw-color">
+          <input type="text" id="af-color-input" placeholder="컬러 검색..." oninput="onAutoInput('color')" autocomplete="off" autocorrect="off">
+          <input type="hidden" id="af-color">
+          <div class="adv-auto-sel" id="af-color-sel"></div>
+          <div class="adv-auto-list" id="af-color-list"></div>
+        </div>
       </div>
     </div>
-    <div class="adv-field"><label>사이즈</label><select id="af-size" onchange="buildFilterOptions()"><option value="">전체</option></select></div>
-    <div class="adv-field"><label>컬렉션</label><select id="af-collection" onchange="buildFilterOptions()"><option value="">전체</option></select></div>
-    <div class="adv-field"><label>상품위치</label><select id="af-location" onchange="buildFilterOptions()"><option value="">전체</option></select></div>
+    <div class="adv-row">
+      <div class="adv-field"><label>사이즈</label><select id="af-size" onchange="onAdvSelect(this)"><option value="">전체</option></select></div>
+      <div class="adv-field"><label>컬렉션</label><select id="af-collection" onchange="onAdvSelect(this)"><option value="">전체</option></select></div>
+    </div>
+    <div class="adv-field"><label>상품위치</label><select id="af-location" onchange="onAdvSelect(this)"><option value="">전체</option></select></div>
   </div>
   <div class="adv-bottom">
     <button class="btn-adv-reset" onclick="resetAdvFilters()">초기화</button>
@@ -723,6 +732,14 @@ function openAdvSearch(){
   histPush();
 }
 
+/** select 변경 시 스크롤 위치 보존 */
+function onAdvSelect(sel){
+  var body=document.getElementById('advBody');
+  var st=body.scrollTop;
+  buildFilterOptions();
+  body.scrollTop=st;
+}
+
 function closeAdvSearch(){
   document.getElementById('advOverlay').classList.remove('show');
   /* 자동완성 드롭다운 닫기 */
@@ -900,8 +917,12 @@ function doAdvSearch(){
 
   var activeNames=[];
   for(var f2=0;f2<filters.length;f2++)activeNames.push(filters[f2].filter.label+': '+filters[f2].val);
-  statusEl.textContent=(totalMatch>MAX_RESULTS?totalMatch+'건 이상 검색됨. '+MAX_RESULTS+'건까지만 표시':res.length+'건 검색됨');
-  if(activeNames.length)statusEl.textContent+=' ['+activeNames.join(', ')+']';
+  var countText=totalMatch>MAX_RESULTS?totalMatch+'건 이상 검색됨. '+MAX_RESULTS+'건까지만 표시':res.length+'건 검색됨';
+  if(activeNames.length){
+    statusEl.innerHTML=esc(countText)+'<div class="filter-desc">'+esc(activeNames.join(' · '))+'</div>';
+  }else{
+    statusEl.textContent=countText;
+  }
 }
 
 /* 자동완성 항목 클릭 (이벤트 위임) */
