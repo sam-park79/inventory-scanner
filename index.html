@@ -491,6 +491,7 @@ function loadData(forceRefresh){
     if(!res.success){dataStatusEl.textContent='로드 실패: '+res.error;dataStatusEl.className='data-status er';return}
     inventory=res.data;
     buildNameIndex();
+    if(res.debug)console.log('[DEBUG] 헤더 인덱스:',JSON.stringify(res.debug.idx),'\n헤더 목록:',res.debug.headers);
     var t=new Date();dataStatusEl.textContent='✓ '+res.count+'건 ('+t.getHours()+':'+String(t.getMinutes()).replace(/^(\d)$/,'0$1')+')';
     dataStatusEl.className='data-status';
   }).catch(function(){dataLoading=false;dataStatusEl.textContent='서버 연결 실패';dataStatusEl.className='data-status er'});
