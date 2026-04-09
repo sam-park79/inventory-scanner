@@ -381,6 +381,18 @@ var MAX_RESULTS=100;
    ══════════════════════════════════════ */
 var inventory=null;
 var dataLoading=false;
+var nameIndex={}; /* 품목명 → [인벤토리 인덱스] 매핑 (다른 컬러/사이즈 빠른 검색용) */
+
+function buildNameIndex(){
+  nameIndex={};
+  if(!inventory)return;
+  for(var i=0;i<inventory.length;i++){
+    var name=inventory[i].m;
+    if(!name)continue;
+    if(!nameIndex[name])nameIndex[name]=[];
+    nameIndex[name].push(i);
+  }
+}
 
 function loadData(forceRefresh){
   if(dataLoading)return;dataLoading=true;
@@ -391,6 +403,7 @@ function loadData(forceRefresh){
     dataLoading=false;
     if(!res.success){dataStatusEl.textContent='로드 실패: '+res.error;dataStatusEl.className='data-status er';return}
     inventory=res.data;
+    buildNameIndex();
     var t=new Date();dataStatusEl.textContent='✓ '+res.count+'건 ('+t.getHours()+':'+String(t.getMinutes()).replace(/^(\d)$/,'0$1')+')';
     dataStatusEl.className='data-status';
   }).catch(function(){dataLoading=false;dataStatusEl.textContent='서버 연결 실패';dataStatusEl.className='data-status er'});
@@ -475,10 +488,11 @@ function renderResults(data,totalMatch){
 var lastSearchData=[];
 
 function hasVariants(itemName,itemCode,fieldVal,type){
-  if(!inventory)return false;
-  for(var i=0;i<inventory.length;i++){
-    var r=inventory[i];
-    if(r.m!==itemName||r.c===itemCode)continue;
+  if(!inventory||!nameIndex[itemName])return false;
+  var indices=nameIndex[itemName];
+  for(var i=0;i<indices.length;i++){
+    var r=inventory[indices[i]];
+    if(r.c===itemCode)continue;
     if(type==='color'&&(r.r||'')!==(fieldVal||''))return true;
     if(type==='size'&&(r.s||'')!==(fieldVal||''))return true;
   }
@@ -501,12 +515,12 @@ function toggleVariants(idx,type){
     return;
   }
 
-  /* 같은 품목명, 다른 컬러/사이즈 검색 */
+  /* 같은 품목명, 다른 컬러/사이즈 검색 (nameIndex 활용) */
   var itemName=d.itemName;
   var results=[];
-  for(var r=0;r<inventory.length;r++){
-    var rec=inventory[r];
-    if(rec.m!==itemName)continue;
+  var indices=nameIndex[itemName]||[];
+  for(var ri=0;ri<indices.length;ri++){
+    var rec=inventory[indices[ri]];
     if(rec.c===d.itemCode)continue;
     if(type==='color'&&(rec.r||'')===(d.color||''))continue;
     if(type==='size'&&(rec.s||'')===(d.size||''))continue;
