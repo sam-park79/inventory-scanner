@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     :root{--bg:#0f1117;--surface:#1a1d27;--card:#222633;--border:#2e3345;
@@ -110,8 +111,8 @@
     .card-head .loc-tag{font-size:11px;font-weight:600;color:var(--orange);background:rgba(251,191,36,.12);padding:2px 8px;border-radius:6px}
     .card-head .total{font-size:12px;font-weight:600;color:var(--green);margin-left:auto}
     .card-body{padding:10px 14px 12px}
-    .field{display:flex;margin-bottom:4px}.field .label{min-width:52px;font-size:11px;font-weight:600;color:var(--text2)}
-    .field .value{font-size:13px;color:var(--text);word-break:break-all}
+    .field{display:flex;margin-bottom:4px;align-items:baseline}.field .label{min-width:52px;flex-shrink:0;font-size:11px;font-weight:600;color:var(--text2)}
+    .field .value{font-size:13px;color:var(--text);word-break:break-word;display:flex;align-items:center;flex-wrap:wrap;gap:4px}
     .loc-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
     .loc-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;
       font-size:12px;font-weight:500;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2)}
@@ -125,7 +126,8 @@
     .gender-default{color:var(--text2);background:var(--surface)}
     .var-btn{background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.25);color:var(--orange);
       font-size:10px;font-weight:600;font-family:var(--font);padding:2px 8px;border-radius:6px;
-      cursor:pointer;margin-left:6px;vertical-align:middle}
+      cursor:pointer;margin-left:6px;vertical-align:middle;white-space:nowrap;display:inline-block;
+      -webkit-appearance:none;appearance:none;line-height:1.4}
     .var-btn:active{background:rgba(251,191,36,.3)}
     .var-btn.active{background:var(--orange);color:#000;border-color:var(--orange)}
     .var-panel{display:none;margin-top:10px}
@@ -745,7 +747,9 @@ function getLine1(val){
 
 function getFilterVal(rec,filter){
   var v=rec[filter.key]||'';
-  return filter.line2?getLine2(v):v;
+  if(filter.line2)v=getLine2(v);
+  /* 불가시 문자/공백 정규화 */
+  return v.replace(/[\s\u00A0\u200B]+/g,' ').trim();
 }
 
 /** 사이즈 정렬: SIZE_ORDER 기준, 없으면 끝에 알파벳순 */
@@ -1071,7 +1075,7 @@ function openScanner(mode){
 
 function closeScanner(){
   document.getElementById('scannerOverlay').classList.remove('show');
-  if(useNative)stopAndroid();else{try{Quagga.stop()}catch(e){}}
+  if(useNative)stopAndroid();else{try{Quagga.stop()}catch(e){}stopIOSQrScan();}
 }
 
 function closeScannerBtn(){
@@ -1241,6 +1245,31 @@ function stopAndroid(){if(scanTimer){clearInterval(scanTimer);scanTimer=null}
   if(scanVideo&&scanVideo.srcObject){scanVideo.srcObject.getTracks().forEach(function(t){t.stop()});scanVideo.srcObject=null}activeTrack=null}
 
 /* ── iOS: QuaggaJS ── */
+var iosQrTimer=null;
+var iosQrCanvas=null;
+
+function startIOSQrScan(){
+  stopIOSQrScan();
+  if(!iosQrCanvas){iosQrCanvas=document.createElement('canvas')}
+  iosQrTimer=setInterval(function(){
+    if(scanned&&scanMode==='search')return;
+    var vid=document.querySelector('#iosScanner video');
+    if(!vid||vid.readyState<2)return;
+    var w=vid.videoWidth,h=vid.videoHeight;
+    if(!w||!h)return;
+    iosQrCanvas.width=w;iosQrCanvas.height=h;
+    var ctx=iosQrCanvas.getContext('2d');
+    ctx.drawImage(vid,0,0,w,h);
+    var imgData=ctx.getImageData(0,0,w,h);
+    var qr=jsQR(imgData.data,w,h,{inversionAttempts:'dontInvert'});
+    if(qr&&qr.data)onCodeRead(qr.data);
+  },200);
+}
+
+function stopIOSQrScan(){
+  if(iosQrTimer){clearInterval(iosQrTimer);iosQrTimer=null}
+}
+
 function initIOSScanner(){
   document.getElementById('androidCam').style.display='none';document.getElementById('iosScanner').style.display='block';
   Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
@@ -1248,24 +1277,25 @@ function initIOSScanner(){
     decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','i2of5_reader','codabar_reader']},
     locate:true,frequency:10
   },function(err){if(err){scCamInfoEl.textContent='카메라 실패';return}
-    Quagga.start();scCamInfoEl.textContent='iOS — QuaggaJS';
+    Quagga.start();scCamInfoEl.textContent='iOS — QuaggaJS + QR';
     try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+    startIOSQrScan();
     discoverCameras()});
   Quagga.onDetected(function(result){if(result.codeResult.code)onCodeRead(result.codeResult.code)});
-  /* 빈 프레임 감지: 바코드 없는 프레임이 연속되면 lastConfirmedCode 해제 */
   var noDetectFrames=0;
   Quagga.onProcessed(function(result){
     if(result&&result.codeResult&&result.codeResult.code){noDetectFrames=0}
     else{noDetectFrames++;if(noDetectFrames>=15&&lastConfirmedCode){lastConfirmedCode='';noDetectFrames=0}}
   });
 }
-function restartQuagga(idx){try{Quagga.stop()}catch(e){}var cam=allCameras[idx];
+function restartQuagga(idx){try{Quagga.stop()}catch(e){}stopIOSQrScan();var cam=allCameras[idx];
   var cs=cam?{deviceId:{exact:cam.deviceId}}:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
   setTimeout(function(){Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),constraints:cs},
     decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','i2of5_reader','codabar_reader']},
     locate:true,frequency:10},function(err){if(err)return;Quagga.start();activeTrack=null;
     try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
       scCamInfoEl.textContent=activeTrack.label||'카메라 '+(idx+1)}}catch(e){}
+    startIOSQrScan();
     try{if(cam)localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}});},300);
 }
 
