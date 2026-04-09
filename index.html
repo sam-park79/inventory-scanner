@@ -791,8 +791,8 @@ function buildFilterOptions(){
     }
 
     if(filter.sizeFormat){
-      /* 사이즈: 스탠다드(유럽) 형태로 수집 */
-      var sizeMap={}; /* std → eur */
+      /* 사이즈: 스탠다드(유럽) 형태로 수집 — 동일 스탠다드에 여러 유럽사이즈 수집 */
+      var sizeMap={}; /* std → {eur1:true, eur2:true} */
       for(var i=0;i<inventory.length;i++){
         var rec=inventory[i],match=true;
         for(var oi=0;oi<otherFilters.length;oi++){
@@ -803,13 +803,15 @@ function buildFilterOptions(){
         var std=getLine2(raw);
         var eur=getLine1(raw);
         if(!std)continue;
-        if(!sizeMap[std])sizeMap[std]=eur;
+        if(!sizeMap[std])sizeMap[std]={};
+        if(eur&&eur!==std)sizeMap[std][eur]=true;
       }
       var sizeKeys=Object.keys(sizeMap).sort(sizeSort);
       var h='<option value="">전체</option>';
       for(var j=0;j<sizeKeys.length;j++){
-        var sk=sizeKeys[j],ek=sizeMap[sk];
-        var label=(ek&&ek!==sk)?sk+'('+ek+')':sk;
+        var sk=sizeKeys[j];
+        var eurs=Object.keys(sizeMap[sk]).sort(function(a,b){var na=parseFloat(a),nb=parseFloat(b);if(!isNaN(na)&&!isNaN(nb))return na-nb;return a<b?-1:a>b?1:0});
+        var label=eurs.length>0?sk+'('+eurs.join('/')+')':sk;
         h+='<option value="'+esc(sk)+'">'+esc(label)+'</option>';
       }
       sel.innerHTML=h;
