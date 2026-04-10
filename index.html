@@ -529,6 +529,10 @@ function buildNameIndex(){
 function loadData(forceRefresh){
   if(dataLoading)return;dataLoading=true;
   dataStatusEl.textContent='데이터 로딩 중...';dataStatusEl.className='data-status ld';
+  if(forceRefresh){
+    qEl.value='';statusEl.textContent='';statusEl.innerHTML='';errorEl.style.display='none';
+    resultsEl.innerHTML='';document.getElementById('selectAllBar').style.display='none';
+  }
   var url=API_URL+'?action=load';
   if(forceRefresh)url+='&refresh=1';
   fetch(url).then(function(r){return r.json()}).then(function(res){
@@ -627,12 +631,9 @@ function hasVariants(d,type){
   for(var i=0;i<indices.length;i++){
     var r=inventory[indices[i]];
     if(r.c===d.itemCode)continue;
-    if(type==='color'){
-      if((r.s||'')!==(d.size||''))continue; /* 같은 사이즈만 */
-      if((r.r||'')!==(d.color||''))return true;
-    }
+    if(type==='color'&&(r.r||'')!==(d.color||''))return true;
     if(type==='size'){
-      if((r.r||'')!==(d.color||''))continue; /* 같은 컬러만 */
+      if((r.r||'')!==(d.color||''))continue;
       if((r.s||'')!==(d.size||''))return true;
     }
   }
@@ -662,10 +663,7 @@ function toggleVariants(idx,type){
   for(var ri=0;ri<indices.length;ri++){
     var rec=inventory[indices[ri]];
     if(rec.c===d.itemCode)continue;
-    if(type==='color'){
-      if((rec.s||'')!==(d.size||''))continue; /* 같은 사이즈만 */
-      if((rec.r||'')===(d.color||''))continue; /* 같은 컬러 제외 */
-    }
+    if(type==='color'&&(rec.r||'')===(d.color||''))continue;
     if(type==='size'){
       if((rec.r||'')!==(d.color||''))continue; /* 같은 컬러만 */
       if((rec.s||'')===(d.size||''))continue; /* 같은 사이즈 제외 */
