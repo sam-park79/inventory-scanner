@@ -470,6 +470,19 @@
   </div>
 </div>
 
+<!-- ══ 위탁처 입력 모달 ══ -->
+<div class="modal-bg" id="consignModal">
+  <div class="modal-box">
+    <h3>📤 위탁처 이동</h3>
+    <p>이동할 위탁처명을 입력하세요</p>
+    <input type="text" id="consignInput" placeholder="예 : 현대백화점 판교점" autocomplete="off">
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeConsignModal()">취소</button>
+      <button class="modal-ok" onclick="doConsign()">출고 실행</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ 처리중 ══ -->
 <div class="processing-overlay" id="procOverlay">
   <div class="proc-spinner"></div>
@@ -1414,8 +1427,21 @@ function promptLocation(){
 function executeConsign(){
   var cbs=document.querySelectorAll('.rv-cb:checked');
   if(cbs.length===0){alert('이동할 상품을 선택해 주세요.');return}
-  if(!confirm('선택한 '+cbs.length+'종 상품을 위탁처 출고 시트에 기록하시겠습니까?'))return;
+  document.getElementById('consignInput').value='';
+  document.getElementById('consignModal').classList.add('show');
+  histPush();
+  setTimeout(function(){document.getElementById('consignInput').focus()},200);
+}
 
+function closeConsignModal(){document.getElementById('consignModal').classList.remove('show')}
+
+function doConsign(){
+  var dest=document.getElementById('consignInput').value.trim();
+  if(!dest){alert('위탁처명을 입력해 주세요.');return}
+
+  document.getElementById('consignModal').classList.remove('show');
+
+  var cbs=document.querySelectorAll('.rv-cb:checked');
   var items=[];
   for(var i=0;i<cbs.length;i++){
     var code=cbs[i].getAttribute('data-code');
@@ -1424,12 +1450,12 @@ function executeConsign(){
   }
 
   document.getElementById('procOverlay').classList.add('show');
-  document.getElementById('procText').textContent=items.length+'종 위탁처 출고 처리 중...';
+  document.getElementById('procText').textContent=items.length+'종 → '+dest+' 출고 처리 중...';
 
   fetch(API_URL,{
     method:'POST',
     headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify({action:'consign',items:items})
+    body:JSON.stringify({action:'consign',items:items,destination:dest})
   })
   .then(function(r){return r.json()})
   .then(function(res){
@@ -1441,9 +1467,10 @@ function executeConsign(){
     var req=res.requested||items.length;
 
     document.getElementById('resultIcon').textContent=fc.length>0?'⚠️':'✅';
-    document.getElementById('resultTitle').textContent='위탁처 출고 기록 완료';
+    document.getElementById('resultTitle').textContent='위탁처 출고 완료';
 
     var rows='';
+    rows+='<div class="result-row loc"><span class="rlabel">위탁처</span><span class="rvalue">'+esc(dest)+'</span></div>';
     rows+='<div class="result-row req"><span class="rlabel">요청</span><span class="rvalue">'+req+'건</span></div>';
     rows+='<div class="result-row ok"><span class="rlabel">처리</span><span class="rvalue">'+sc.length+'건 <span class="detail-link" onclick="toggleDetail(\'okDetail\')">상세보기</span></span></div>';
     if(fc.length>0){
@@ -1493,6 +1520,8 @@ window.addEventListener('popstate',function(){
 
   if(adv.classList.contains('show')){
     adv.classList.remove('show');
+  }else if(document.getElementById('consignModal').classList.contains('show')){
+    document.getElementById('consignModal').classList.remove('show');
   }else if(modal.classList.contains('show')){
     modal.classList.remove('show');
   }else if(review.classList.contains('show')){
