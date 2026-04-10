@@ -262,10 +262,10 @@
 
     /* ── 로케이션 입력 모달 ── */
     .modal-bg{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.7);display:none;
-      align-items:center;justify-content:center;padding:20px}
+      align-items:flex-start;justify-content:center;padding:20px;padding-top:15vh}
     .modal-bg.show{display:flex}
     .modal-box{background:var(--card);border:1px solid var(--border);border-radius:18px;
-      padding:24px 20px;width:100%;max-width:360px;text-align:center}
+      padding:24px 20px;width:100%;max-width:360px;text-align:center;transition:transform .2s ease}
     .modal-box h3{font-size:17px;font-weight:700;margin-bottom:12px}
     .modal-box p{font-size:13px;color:var(--text2);margin-bottom:16px}
     .modal-box input[type="text"]{width:100%;height:48px;padding:0 16px;border:1.5px solid var(--border);
@@ -1541,6 +1541,24 @@ function closeResult(){
   document.getElementById('resultOverlay').classList.remove('show');
   if(historyDepth>0)history.go(-historyDepth);
   historyDepth=0;
+}
+
+/* 안드로이드 키보드 대응: 모달을 키보드 위로 이동 */
+if(window.visualViewport){
+  var modalBox=null;
+  window.visualViewport.addEventListener('resize',function(){
+    modalBox=document.querySelector('.modal-bg.show .modal-box');
+    if(!modalBox)return;
+    var kbHeight=window.innerHeight-window.visualViewport.height;
+    if(kbHeight>100){
+      modalBox.style.transform='translateY(-'+Math.floor(kbHeight*0.4)+'px)';
+    }else{
+      modalBox.style.transform='';
+    }
+  });
+  window.visualViewport.addEventListener('scroll',function(){
+    if(modalBox)modalBox.style.transform='';
+  });
 }
 </script>
 </body>
