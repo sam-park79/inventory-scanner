@@ -21,17 +21,20 @@
       font-size:15px;line-height:1.5;overflow-x:hidden;
       padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 
-    .app{display:flex;flex-direction:column;height:100dvh;height:100vh;max-width:520px;margin:0 auto}
+    .app{display:flex;flex-direction:column;height:100dvh;height:100vh;max-width:520px;margin:0 auto;background:var(--bg)}
     .header{padding:14px 16px 10px;background:var(--bg);position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border)}
     .header-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
     .header h1{font-size:18px;font-weight:700;letter-spacing:-.3px;flex-shrink:0}
-    .header-btns{display:flex;gap:6px}
-    .hdr-btn{background:var(--surface);border:1px solid var(--border);color:var(--text2);
-      height:30px;padding:0 10px;border-radius:8px;font-size:11px;font-family:var(--font);cursor:pointer;
-      display:inline-flex;align-items:center;gap:3px;flex-shrink:0}
+    .header-btns{display:flex;gap:10px}
+    .hdr-btn{background:var(--surface);border:1px solid var(--border);color:#fff;
+      width:52px;padding:6px 0;border-radius:10px;font-size:9px;font-family:var(--font);cursor:pointer;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;flex-shrink:0}
+    .hdr-btn .hb-icon{font-size:20px;line-height:1}
+    .hdr-btn .hb-text{line-height:1.1;letter-spacing:-.3px}
     .hdr-btn:active{background:var(--card)}
     .hdr-btn.move{background:rgba(251,191,36,.15);border-color:rgba(251,191,36,.3);color:var(--orange)}
-    .hdr-btn.search{background:rgba(79,140,255,.15);border-color:rgba(79,140,255,.3);color:var(--accent)}
+    .hdr-btn.search{background:rgba(79,140,255,.15);border-color:rgba(79,140,255,.3);color:#fff}
+    .hdr-btn.refresh{background:rgba(52,211,153,.15);border-color:rgba(52,211,153,.3);color:#fff}
 
     /* ── 상세 검색 오버레이 ── */
     .adv-overlay{position:fixed;inset:0;z-index:200;background:var(--bg);display:none;flex-direction:column}
@@ -40,8 +43,11 @@
       padding-top:max(14px,env(safe-area-inset-top))}
     .adv-top h2{font-size:17px;font-weight:700}
     .adv-close{background:var(--surface);border:1px solid var(--border);color:var(--text);
-      height:34px;padding:0 14px;border-radius:10px;font-size:13px;font-family:var(--font);cursor:pointer}
+      height:40px;padding:0 16px;border-radius:10px;font-size:14px;font-family:var(--font);cursor:pointer}
     .adv-body{flex:1;overflow-y:auto;padding:12px 16px;-webkit-overflow-scrolling:touch}
+    .adv-consign{margin-bottom:16px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:10px}
+    .adv-consign label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--text);cursor:pointer}
+    .adv-consign input[type="checkbox"]{width:18px;height:18px;accent-color:var(--accent)}
     .adv-row{display:flex;gap:10px;margin-bottom:20px}
     .adv-row .adv-field{flex:1;margin-bottom:0}
     .adv-field{margin-bottom:20px}
@@ -88,22 +94,28 @@
     .data-status{font-size:11px;color:var(--green);margin-top:1px}
     .data-status.ld{color:var(--accent)}.data-status.er{color:var(--red)}
 
-    .search-wrap{padding:10px 16px 8px;position:sticky;top:85px;z-index:9;background:var(--bg)}
-    .search-box{display:flex;gap:6px}
+    .search-wrap{padding:10px 16px 8px;position:sticky;top:95px;z-index:9;background:var(--bg)}
+    .search-box{display:flex;gap:6px;align-items:center}
     .search-box input[type="search"]{flex:1;min-width:0;height:44px;padding:0 14px;
       border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);
       color:var(--text);font-size:16px;font-family:var(--font);outline:none}
     .search-box input[type="search"]:focus{border-color:var(--accent)}
     .search-box input[type="search"]::placeholder{color:var(--text2)}
+    .sb-btn{width:44px;height:44px;border:none;border-radius:var(--radius);font-size:22px;
+      cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+      -webkit-appearance:none;appearance:none}
+    .sb-cam{background:#34d399;color:#000}
+    .sb-cam:active{background:#2ab882}
+    .sb-search{background:var(--accent);color:#fff}
+    .sb-search:active{background:var(--accent2)}
     .btn{height:44px;padding:0 13px;border:none;border-radius:var(--radius);color:#fff;
       font-size:14px;font-weight:600;font-family:var(--font);cursor:pointer;flex-shrink:0;
       display:inline-flex;align-items:center;justify-content:center}
     .btn-primary{background:var(--accent)}.btn-primary:active{background:var(--accent2)}
-    .btn-scan{background:#7c3aed;padding:0 12px;font-size:17px}.btn-scan:active{background:#6d28d9}
 
     .status{padding:6px 16px;font-size:13px;color:var(--text2)}
     .filter-desc{font-size:12px;color:var(--accent);margin-top:3px;line-height:1.4}
-    .results{flex:1;overflow-y:auto;padding:0 16px 100px;-webkit-overflow-scrolling:touch}
+    .results{flex:1;overflow-y:auto;padding:0 16px 100px;-webkit-overflow-scrolling:touch;background:var(--bg)}
     .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;position:relative}
     .card-head{display:flex;align-items:center;padding:12px 14px 8px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:6px}
     .card-head .code{font-size:12px;font-weight:600;color:var(--accent);background:rgba(79,140,255,.12);padding:2px 8px;border-radius:6px;cursor:pointer;-webkit-user-select:none;user-select:none}
@@ -172,8 +184,8 @@
     .sc-top h2{font-size:14px;font-weight:700;color:#fff}
     .sc-btns{display:flex;gap:5px}
     .sc-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;
-      height:32px;padding:0 9px;border-radius:9px;font-size:11px;font-weight:500;
-      font-family:var(--font);cursor:pointer;display:inline-flex;align-items:center;gap:3px;
+      height:40px;padding:0 12px;border-radius:10px;font-size:13px;font-weight:500;
+      font-family:var(--font);cursor:pointer;display:inline-flex;align-items:center;gap:4px;
       -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);flex-shrink:0}
     .sc-btn:active{background:rgba(255,255,255,.2)}
     .sc-btn.active{background:rgba(251,191,36,.9);color:#000;border-color:transparent}
@@ -215,12 +227,12 @@
     .rv-top{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;
       padding-top:max(14px,env(safe-area-inset-top))}
     .rv-top h2{font-size:17px;font-weight:700}
-    .rv-scan-btn{background:#7c3aed;border:none;color:#fff;width:34px;height:34px;
-      border-radius:10px;font-size:16px;cursor:pointer;display:flex;align-items:center;
+    .rv-scan-btn{background:#7c3aed;border:none;color:#fff;width:40px;height:40px;
+      border-radius:10px;font-size:18px;cursor:pointer;display:flex;align-items:center;
       justify-content:center;flex-shrink:0;-webkit-appearance:none;appearance:none}
     .rv-scan-btn:active{background:#6d28d9}
     .rv-close{background:var(--surface);border:1px solid var(--border);
-      color:var(--text);height:34px;padding:0 14px;border-radius:10px;font-size:13px;font-family:var(--font);cursor:pointer}
+      color:var(--text);height:40px;padding:0 16px;border-radius:10px;font-size:14px;font-family:var(--font);cursor:pointer}
     .rv-body{flex:1;overflow-y:auto;padding:12px 16px;-webkit-overflow-scrolling:touch}
     .rv-table{width:100%;border-collapse:collapse}
     .rv-table th{font-size:13px;font-weight:700;color:var(--text);text-align:left;padding:8px 6px;
@@ -317,9 +329,9 @@
     <div class="header-row">
       <h1>📦 재고 조회</h1>
       <div class="header-btns">
-        <button class="hdr-btn search" onclick="openAdvSearch()">🔍 상세 검색</button>
-        <button class="hdr-btn move" onclick="startMoveMode()">📦 상품 이동</button>
-        <button class="hdr-btn" onclick="loadData(true)">🔄 새로고침</button>
+        <button class="hdr-btn search" onclick="openAdvSearch()"><span class="hb-icon">🔍</span><span class="hb-text">상세검색</span></button>
+        <button class="hdr-btn move" onclick="startMoveMode()"><span class="hb-icon">📦</span><span class="hb-text">상품이동</span></button>
+        <button class="hdr-btn refresh" onclick="loadData(true)"><span class="hb-icon">🔄</span><span class="hb-text">새로고침</span></button>
       </div>
     </div>
     <p>품목코드 / 품목명 검색 · 바코드 스캔</p>
@@ -329,8 +341,8 @@
     <div class="search-box">
       <input id="q" type="search" placeholder="품목코드 / 품목명" enterkeyhint="search"
              autocomplete="off" autocorrect="off" autocapitalize="off">
-      <button class="btn btn-scan" onclick="openScanner('search')">📷</button>
-      <button class="btn btn-primary" onclick="doSearch()">검색</button>
+      <button class="sb-btn sb-cam" onclick="openScanner('search')">📷</button>
+      <button class="sb-btn sb-search" onclick="doSearch()">🔍</button>
     </div>
   </div>
   <div class="error-msg" id="error"></div>
@@ -352,6 +364,7 @@
     <button class="adv-close" onclick="histBack()">← 뒤로</button>
   </div>
   <div class="adv-body" id="advBody">
+    <div class="adv-consign"><label><input type="checkbox" id="af-consign" checked onchange="buildFilterOptions()"> 위탁상품 제외</label></div>
     <div class="adv-field"><label>브랜드</label>
       <div class="adv-auto" id="aw-brand">
         <input type="text" id="af-brand-input" placeholder="브랜드 검색..." oninput="onAutoInput('brand')" autocomplete="off" autocorrect="off">
@@ -794,6 +807,13 @@ function closeAdvSearch(){
   for(var i=0;i<lists.length;i++)lists[i].classList.remove('show');
 }
 
+/** 위탁상품 제외 체크 */
+function isConsignExcluded(rec){
+  if(!document.getElementById('af-consign').checked)return false;
+  var b=rec.b||rec.brand||'';
+  return b.charAt(0)==='-';
+}
+
 /** 연동 드롭다운 + 자동완성 옵션 재구성 */
 function buildFilterOptions(){
   if(!inventory)return;
@@ -815,7 +835,9 @@ function buildFilterOptions(){
       /* 사이즈: 스탠다드(유럽) 형태로 수집 — 동일 스탠다드에 여러 유럽사이즈 수집 */
       var sizeMap={}; /* std → {eur1:true, eur2:true} */
       for(var i=0;i<inventory.length;i++){
-        var rec=inventory[i],match=true;
+        var rec=inventory[i];
+        if(isConsignExcluded(rec))continue;
+        var match=true;
         for(var oi=0;oi<otherFilters.length;oi++){
           if(getFilterVal(rec,otherFilters[oi].filter)!==otherFilters[oi].val){match=false;break}
         }
@@ -841,7 +863,9 @@ function buildFilterOptions(){
       /* 일반 드롭다운 */
       var vals={};
       for(var i2=0;i2<inventory.length;i2++){
-        var rec2=inventory[i2],match2=true;
+        var rec2=inventory[i2];
+        if(isConsignExcluded(rec2))continue;
+        var match2=true;
         for(var oi2=0;oi2<otherFilters.length;oi2++){
           if(getFilterVal(rec2,otherFilters[oi2].filter)!==otherFilters[oi2].val){match2=false;break}
         }
@@ -883,7 +907,9 @@ function onAutoInput(autoId){
   /* 매칭 값 수집 */
   var vals={};
   for(var i=0;i<inventory.length;i++){
-    var rec=inventory[i],match=true;
+    var rec=inventory[i];
+    if(isConsignExcluded(rec))continue;
+    var match=true;
     for(var oi=0;oi<otherFilters.length;oi++){
       if(getFilterVal(rec,otherFilters[oi].filter)!==otherFilters[oi].val){match=false;break}
     }
@@ -942,6 +968,7 @@ function clearAutoVal(autoId){
 }
 
 function resetAdvFilters(){
+  document.getElementById('af-consign').checked=true;
   for(var f=0;f<ADV_FILTERS.length;f++){
     var fi=ADV_FILTERS[f];
     if(fi.auto){
@@ -969,7 +996,9 @@ function doAdvSearch(){
 
   var res=[],totalMatch=0;
   for(var i=0;i<inventory.length;i++){
-    var rec=inventory[i],match=true;
+    var rec=inventory[i];
+    if(isConsignExcluded(rec))continue;
+    var match=true;
     for(var fi=0;fi<filters.length;fi++){
       if(getFilterVal(rec,filters[fi].filter)!==filters[fi].val){match=false;break}
     }
