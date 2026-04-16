@@ -237,10 +237,16 @@
     .rv-table{width:100%;border-collapse:collapse}
     .rv-table th{font-size:13px;font-weight:700;color:var(--text);text-align:left;padding:8px 6px;
       border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg)}
-    .rv-table td{font-size:13px;padding:10px 6px;border-bottom:1px solid var(--border)}
+    .rv-table td{font-size:13px;padding:10px 6px;border-bottom:1px solid var(--border);vertical-align:middle}
     .rv-table input[type="checkbox"]{width:18px;height:18px;accent-color:var(--green)}
-    .rv-table .code-cell{font-family:monospace;font-size:12px;word-break:break-all}
+    .rv-table .code-cell{font-family:monospace;font-size:11px;word-break:break-all}
+    .rv-table .name-cell{font-size:12px;color:var(--text);word-break:break-word;max-width:120px}
     .rv-table .loc-cell{font-size:11px;color:var(--orange)}
+    .rv-table .qty-cell{width:50px;height:32px;padding:0 6px;border:1.5px solid var(--border);
+      border-radius:8px;background:var(--surface);color:var(--text);font-size:14px;font-weight:600;
+      font-family:var(--font);text-align:center;outline:none;-webkit-appearance:none;appearance:none;-moz-appearance:textfield}
+    .rv-table .qty-cell::-webkit-outer-spin-button,.rv-table .qty-cell::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+    .rv-table .qty-cell:focus{border-color:var(--accent)}
     .rv-bottom{padding:12px 16px;border-top:1px solid var(--border);
       padding-bottom:max(12px,env(safe-area-inset-bottom))}
     .rv-manual{padding:10px 16px;border-top:1px solid var(--border);background:var(--surface)}
@@ -1364,22 +1370,48 @@ function restartQuagga(idx){try{Quagga.stop()}catch(e){}stopIOSQrScan();var cam=
 
 function renderReviewTable(){
   var keys=Object.keys(moveScannedItems);
-  var h='<table class="rv-table"><thead><tr><th style="width:30px"><input type="checkbox" checked onchange="toggleAllCb(this)"></th><th>품목코드</th><th>상품위치</th><th style="width:45px;text-align:center">수량</th></tr></thead><tbody>';
+  var h='<table class="rv-table"><thead><tr>'+
+    '<th style="width:30px"><input type="checkbox" checked onchange="toggleAllCb(this)"></th>'+
+    '<th>품목코드</th><th>품목명</th><th>상품위치</th>'+
+    '<th style="width:55px;text-align:center">수량</th></tr></thead><tbody>';
   for(var i=0;i<keys.length;i++){
-    var loc=findLocationByCode(keys[i]);
-    h+='<tr><td><input type="checkbox" class="rv-cb" checked data-code="'+esc(keys[i])+'"></td>'+
-      '<td class="code-cell">'+esc(keys[i])+'</td><td class="loc-cell">'+esc(loc)+'</td><td style="text-align:center">'+moveScannedItems[keys[i]]+'</td></tr>';
+    var code=keys[i];
+    var info=findItemByCode(code);
+    var name=info.name||'-';
+    var loc=info.loc||'-';
+    h+='<tr><td><input type="checkbox" class="rv-cb" checked data-code="'+esc(code)+'"></td>'+
+      '<td class="code-cell">'+esc(code)+'</td>'+
+      '<td class="name-cell">'+esc(name)+'</td>'+
+      '<td class="loc-cell">'+esc(loc)+'</td>'+
+      '<td style="text-align:center"><input type="number" class="qty-cell" data-code="'+esc(code)+
+      '" value="'+moveScannedItems[code]+'" min="1" onchange="updateQty(this)"></td></tr>';
   }
   h+='</tbody></table>';
   document.getElementById('rvBody').innerHTML=h;
 }
 
-function findLocationByCode(code){
-  if(!inventory)return'-';
+function findItemByCode(code){
+  if(!inventory)return{};
   for(var i=0;i<inventory.length;i++){
-    if(inventory[i].c===code)return inventory[i].p||'-';
+    if(inventory[i].c===code)return{name:inventory[i].m||'',loc:inventory[i].p||''};
   }
-  return'-';
+  return{};
+}
+
+function findLocationByCode(code){
+  var info=findItemByCode(code);
+  return info.loc||'-';
+}
+
+function updateQty(input){
+  var code=input.getAttribute('data-code');
+  var val=parseInt(input.value)||0;
+  if(val<1){val=1;input.value=1}
+  var prev=moveScannedItems[code]||0;
+  moveScannedItems[code]=val;
+  moveScannedTotal+=(val-prev);
+  var el=document.getElementById('scCnt');
+  if(el)el.textContent='스캔: '+moveScannedTotal+'건 ('+Object.keys(moveScannedItems).length+'종)';
 }
 
 function showReview(){
