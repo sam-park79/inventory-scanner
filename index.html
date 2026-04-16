@@ -202,9 +202,10 @@
     .sc-guide-wrap{position:fixed;inset:0;z-index:110;pointer-events:none;display:flex;align-items:center;justify-content:center}
     .sc-guide{position:relative;width:90%;max-width:440px;aspect-ratio:1.8/1;border:2.5px solid var(--green);
       border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.5)}
-    .sc-guide-line{position:absolute;left:8%;right:8%;height:2px;background:var(--green);border-radius:2px;
-      opacity:.7;animation:scanAnim 2s ease-in-out infinite alternate}
-    @keyframes scanAnim{0%{top:15%}100%{top:85%}}
+    .sc-guide-line{position:absolute;left:8%;right:8%;top:15%;height:2px;background:var(--green);border-radius:2px;
+      opacity:.7;will-change:transform;transform:translate3d(0,0,0);backface-visibility:hidden;-webkit-backface-visibility:hidden}
+    .sc-guide-line.animate{animation:scanAnim 2s ease-in-out infinite alternate}
+    @keyframes scanAnim{from{transform:translate3d(0,0,0)}to{transform:translate3d(0,var(--scan-dist,200px),0)}}
     #iosScanner{flex:1;background:#000;display:none;position:relative;overflow:hidden}
     #iosScanner video,#iosScanner canvas{width:100%!important;height:100%!important;
       -o-object-fit:cover;object-fit:cover;position:absolute;top:0;left:0}
@@ -1168,6 +1169,17 @@ function openScanner(mode){
   document.getElementById('btnTorch').classList.remove('active');
   document.getElementById('scannerOverlay').classList.add('show');
 
+  /* 스캔 바 애니메이션 거리를 가이드 박스 높이에 맞춰 설정 (GPU 가속) */
+  setTimeout(function(){
+    var guide=document.querySelector('.sc-guide');
+    var line=document.querySelector('.sc-guide-line');
+    if(guide&&line){
+      var h=guide.offsetHeight;
+      line.style.setProperty('--scan-dist',(h*0.7)+'px');
+      line.classList.add('animate');
+    }
+  },50);
+
   if(scanMode==='move'){
     document.getElementById('scTitle').textContent='📦 상품 이동 스캔';
     document.getElementById('scCounter').classList.add('show');
@@ -1374,7 +1386,7 @@ function startIOSQrScan(){
     var imgData=ctx.getImageData(0,0,w,h);
     var qr=jsQR(imgData.data,w,h,{inversionAttempts:'dontInvert'});
     if(qr&&qr.data)onCodeRead(qr.data);
-  },200);
+  },400);
 }
 
 function stopIOSQrScan(){
