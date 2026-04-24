@@ -1328,12 +1328,15 @@ function toggleTorch(){
 function onCodeRead(code){
   if(scanned&&scanMode==='search')return;
   if(scanMode==='location'){
-    /* 위치 스캔: 1회 인식 즉시 확정 → 모달 복귀 */
+    /* 위치 스캔 완료: 직접 처리 (histBack 미사용으로 경고 방지) */
     document.getElementById('locInput').value=code;
-    histBack(); /* 스캐너 history 제거 */
+    scanMode='search'; /* 모드 먼저 리셋 */
+    closeScanner();
+    /* history 스택 정리 */
+    if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back();}
     setTimeout(function(){
       document.getElementById('locModal').classList.add('show');
-    },120);
+    },80);
     return;
   }
   if(scanMode==='move'&&code===lastConfirmedCode)return;
