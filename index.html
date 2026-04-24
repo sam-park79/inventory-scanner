@@ -176,11 +176,11 @@
     .card-cb{width:17px;height:17px;accent-color:var(--accent);flex-shrink:0;cursor:pointer;margin-right:4px}
 
     /* ── 스캐너 오버레이 ── */
-    .scanner-overlay{position:fixed;inset:0;z-index:100;background:#000;display:none;flex-direction:column;
+    .scanner-overlay{position:fixed;inset:0;z-index:400;background:#000;display:none;flex-direction:column;
       -ms-touch-action:manipulation;touch-action:manipulation}
     .scanner-overlay.show{display:flex}
     .sc-top{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;
-      background:rgba(15,17,23,.85);padding-top:max(8px,env(safe-area-inset-top));z-index:130}
+      background:rgba(15,17,23,.85);padding-top:max(8px,env(safe-area-inset-top));z-index:430}
     .sc-top h2{font-size:14px;font-weight:700;color:#fff}
     .sc-btns{display:flex;gap:5px}
     .sc-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;
@@ -192,14 +192,14 @@
     .sc-btn.sw{background:rgba(79,140,255,.2);border-color:rgba(79,140,255,.3)}
 
     /* 스캔 카운터 (이동 모드) */
-    .sc-counter{background:rgba(15,17,23,.85);padding:8px 16px;text-align:center;z-index:125;display:none}
+    .sc-counter{background:rgba(15,17,23,.85);padding:8px 16px;text-align:center;z-index:425;display:none}
     .sc-counter.show{display:block}
     .sc-counter .cnt{font-size:14px;font-weight:700;color:var(--orange)}
     .sc-counter .last{font-size:11px;color:var(--text2);margin-top:2px}
 
     .sc-camera{flex:1;position:relative;display:flex;align-items:center;justify-content:center;background:#000;overflow:hidden}
     #scanVideo{width:100%;height:100%;-o-object-fit:cover;object-fit:cover}
-    .sc-guide-wrap{position:fixed;inset:0;z-index:110;pointer-events:none;display:flex;align-items:center;justify-content:center}
+    .sc-guide-wrap{position:fixed;inset:0;z-index:410;pointer-events:none;display:flex;align-items:center;justify-content:center}
     .sc-guide{position:relative;width:90%;max-width:440px;aspect-ratio:1.8/1;border:2.5px solid var(--green);
       border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.5)}
     .sc-guide-line{position:absolute;left:8%;right:8%;top:15%;height:2px;background:var(--green);border-radius:2px;
@@ -211,7 +211,7 @@
       -o-object-fit:cover;object-fit:cover;position:absolute;top:0;left:0}
     #iosScanner canvas.drawingBuffer{display:none!important}
 
-    .sc-bottom{position:fixed;bottom:0;left:0;right:0;z-index:120;background:rgba(15,17,23,.85);
+    .sc-bottom{position:fixed;bottom:0;left:0;right:0;z-index:420;background:rgba(15,17,23,.85);
       -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
       padding:8px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));text-align:center}
     .sc-hint{font-size:12px;color:var(--text2)}
@@ -1332,10 +1332,12 @@ function onCodeRead(code){
 }
 
 function openLocScanner(){
+  alert('1. openLocScanner 호출됨');
   document.getElementById('locModal').classList.remove('show');
-  /* histPush는 openScanner 래퍼에서 처리됨 */
   scanMode='location';
+  alert('2. openScanner 호출 직전');
   openScanner('location');
+  alert('3. openScanner 호출 완료. overlay show? '+document.getElementById('scannerOverlay').classList.contains('show'));
 }
 
 function onScanConfirmed(code){
