@@ -1198,6 +1198,10 @@ function openScanner(mode){
     document.getElementById('scCnt').textContent='스캔: 0건';
     document.getElementById('scLast').textContent='';
     moveScannedItems={};moveScannedTotal=0;
+  }else if(scanMode==='location'){
+    document.getElementById('scTitle').textContent='📍 위치 QR 스캔';
+    document.getElementById('scCounter').classList.remove('show');
+    document.getElementById('btnScanDone').classList.remove('show');
   }else{
     document.getElementById('scTitle').textContent='📷 바코드 스캔';
     document.getElementById('scCounter').classList.remove('show');
@@ -1312,10 +1316,12 @@ function toggleTorch(){
 function onCodeRead(code){
   if(scanned&&scanMode==='search')return;
   if(scanMode==='location'){
-    /* 위치 스캔: 1회 인식 즉시 확정 */
+    /* 위치 스캔: 1회 인식 즉시 확정 → 모달 복귀 */
     document.getElementById('locInput').value=code;
-    closeScanner();
-    document.getElementById('locModal').classList.add('show');
+    histBack(); /* 스캐너 history 제거 */
+    setTimeout(function(){
+      document.getElementById('locModal').classList.add('show');
+    },120);
     return;
   }
   if(scanMode==='move'&&code===lastConfirmedCode)return;
@@ -1327,23 +1333,9 @@ function onCodeRead(code){
 
 function openLocScanner(){
   document.getElementById('locModal').classList.remove('show');
+  /* histPush는 openScanner 래퍼에서 처리됨 */
   scanMode='location';
-  scanned=false;lastCode='';matchCount=0;lastConfirmedCode='';
-  scReadEl.textContent='';scCamInfoEl.textContent='';
-  document.getElementById('scTitle').textContent='📍 위치 QR 스캔';
-  document.getElementById('scCounter').classList.remove('show');
-  document.getElementById('btnScanDone').classList.remove('show');
-  document.getElementById('scannerOverlay').classList.add('show');
-  setTimeout(function(){
-    var guide=document.querySelector('.sc-guide');
-    var line=document.querySelector('.sc-guide-line');
-    if(guide&&line){
-      var h=guide.offsetHeight;
-      line.style.setProperty('--scan-dist',(h*0.7)+'px');
-      line.classList.add('animate');
-    }
-  },50);
-  if(useNative)initAndroidScanner();else initIOSScanner();
+  openScanner('location');
 }
 
 function onScanConfirmed(code){
