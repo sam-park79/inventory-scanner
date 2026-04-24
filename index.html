@@ -1229,6 +1229,16 @@ function closeScanner(){
 }
 
 function closeScannerBtn(){
+  /* location 모드: 위치 모달로 복귀 */
+  if(scanMode==='location'){
+    closeScanner();
+    if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back();}
+    setTimeout(function(){
+      scanMode='search';
+      document.getElementById('locModal').classList.add('show');
+    },100);
+    return;
+  }
   /* 이동모드에서 스캔 데이터가 있으면 경고 */
   if(scanMode==='move'&&moveScannedTotal>0&&!scanFromReview){
     if(!confirm('스캔한 '+moveScannedTotal+'건의 데이터가 초기화됩니다.\n정말 나가시겠습니까?'))return;
@@ -1328,15 +1338,17 @@ function toggleTorch(){
 function onCodeRead(code){
   if(scanned&&scanMode==='search')return;
   if(scanMode==='location'){
-    /* 위치 스캔 완료: 직접 처리 (histBack 미사용으로 경고 방지) */
+    /* 중복 호출 방지 */
+    if(scanned)return;
+    scanned=true;
     document.getElementById('locInput').value=code;
-    scanMode='search'; /* 모드 먼저 리셋 */
     closeScanner();
-    /* history 스택 정리 */
+    /* history 정리: 스캐너 push만 제거 (locModal push는 유지) */
     if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back();}
     setTimeout(function(){
+      scanMode='search'; /* 모드 리셋 (locModal 오픈 이후) */
       document.getElementById('locModal').classList.add('show');
-    },80);
+    },100);
     return;
   }
   if(scanMode==='move'&&code===lastConfirmedCode)return;
