@@ -235,6 +235,14 @@
     .rv-close{background:var(--surface);border:1px solid var(--border);
       color:var(--text);height:40px;padding:0 16px;border-radius:10px;font-size:14px;font-family:var(--font);cursor:pointer}
     .rv-body{flex:1;overflow-y:auto;padding:12px 16px;-webkit-overflow-scrolling:touch}
+    .rv-summary{display:flex;align-items:center;justify-content:center;gap:12px;
+      background:var(--surface);border:1px solid var(--border);border-radius:12px;
+      padding:10px 16px;margin-bottom:12px}
+    .rv-sum-item{display:flex;flex-direction:column;align-items:center;gap:2px}
+    .rv-sum-label{font-size:11px;color:var(--text2);font-weight:500}
+    .rv-sum-val{font-size:18px;font-weight:700;color:var(--text)}
+    .rv-sum-val.accent{color:var(--orange)}
+    .rv-sum-divider{width:1px;height:32px;background:var(--border);margin:0 4px}
     .rv-table{width:100%;border-collapse:collapse}
     .rv-table th{font-size:13px;font-weight:700;color:var(--text);text-align:left;padding:8px 6px;
       border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg)}
@@ -325,10 +333,9 @@
     .result-row .rvalue{font-weight:700}
     .detail-link{font-size:12px;color:var(--text2);cursor:pointer;text-decoration:underline;margin-left:6px}
     .detail-link:active{color:var(--text)}
-    /* ★ 상세 섹션: result-rows 안에 인라인으로 배치되므로 margin-bottom 조정 */
-    .result-rows .detail-section{margin-bottom:6px}
+    .result-detail{text-align:left;margin-bottom:12px}
     .detail-section{background:var(--surface);border:1px solid var(--border);border-radius:10px;
-      padding:10px 12px;display:none;max-height:150px;overflow-y:auto;
+      padding:10px 12px;margin-bottom:8px;display:none;max-height:150px;overflow-y:auto;
       -webkit-overflow-scrolling:touch}
     .detail-section.show{display:block}
     .detail-section .dt{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:6px}
@@ -467,7 +474,7 @@
     </div>
   </div>
   <div class="rv-bottom">
-    <button class="btn-move" id="btnMove" onclick="promptLocation()">📦 보관 이동</button>
+    <button class="btn-move" id="btnMove" onclick="promptLocation()">📦 상품 이동</button>
     <button class="btn-consign" id="btnConsign" onclick="executeConsign()">📤 위탁처 이동</button>
   </div>
 </div>
@@ -475,9 +482,12 @@
 <!-- ══ 위치 입력 모달 ══ -->
 <div class="modal-bg" id="locModal">
   <div class="modal-box">
-    <h3>📍 상품 보관 위치 입력</h3>
-    <p>상품을 이동할 보관 위치를 입력하세요</p>
-    <input type="text" id="locInput" placeholder="예 : 창고 A1" autocomplete="off" autocapitalize="characters">
+    <h3>📍 상품 이동 위치 입력</h3>
+    <p>상품을 이동할 창고 위치를 입력하세요</p>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="text" id="locInput" placeholder="예 : 창고 A1" autocomplete="off" autocapitalize="characters" style="flex:1">
+      <button onclick="openLocScanner()" style="width:44px;height:44px;border:none;border-radius:10px;background:#34d399;font-size:22px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center">📷</button>
+    </div>
     <div class="modal-btns">
       <button class="modal-cancel" onclick="closeLocModal()">취소</button>
       <button class="modal-ok" onclick="executeMove()">이동 실행</button>
@@ -516,6 +526,7 @@
     <div class="result-icon" id="resultIcon">✅</div>
     <div class="result-title" id="resultTitle">상품 이동 완료</div>
     <div class="result-rows" id="resultRows"></div>
+    <div class="result-detail" id="resultDetail"></div>
     <button class="result-ok" onclick="closeResult()">확인</button>
   </div>
 </div>
@@ -542,7 +553,7 @@ var MAX_RESULTS=100;
    ══════════════════════════════════════ */
 var inventory=null;
 var dataLoading=false;
-var nameIndex={};
+var nameIndex={}; /* 품목명 → [인벤토리 인덱스] 매핑 (다른 컬러/사이즈 빠른 검색용) */
 
 function buildNameIndex(){
   nameIndex={};
@@ -673,8 +684,10 @@ function toggleVariants(idx,type){
   var panel=document.getElementById('vp-'+idx+'-'+type);
   var d=lastSearchData[idx];if(!d||!inventory)return;
 
+  /* 이미 열려 있으면 닫기 */
   if(panel.classList.contains('show')){
     panel.classList.remove('show');panel.innerHTML='';
+    /* 해당 버튼만 active 해제 */
     var btns=document.getElementById('card-'+idx).querySelectorAll('.var-btn');
     for(var b=0;b<btns.length;b++){
       if((type==='color'&&btns[b].textContent==='다른 컬러')||(type==='size'&&btns[b].textContent==='다른 사이즈'))
@@ -683,6 +696,7 @@ function toggleVariants(idx,type){
     return;
   }
 
+  /* 같은 품목명, 다른 컬러/사이즈 검색 (nameIndex 활용) */
   var itemName=d.itemName;
   var results=[];
   var indices=nameIndex[itemName]||[];
@@ -691,8 +705,8 @@ function toggleVariants(idx,type){
     if(rec.c===d.itemCode)continue;
     if(type==='color'&&(rec.r||'')===(d.color||''))continue;
     if(type==='size'){
-      if((rec.r||'')!==(d.color||''))continue;
-      if((rec.s||'')===(d.size||''))continue;
+      if((rec.r||'')!==(d.color||''))continue; /* 같은 컬러만 */
+      if((rec.s||'')===(d.size||''))continue; /* 같은 사이즈 제외 */
     }
     var tq=0,locs=[],rl=rec.l||[];
     for(var j=0;j<rl.length;j++){tq+=rl[j].q;locs.push({n:rl[j].n,q:rl[j].q})}
@@ -725,6 +739,7 @@ function toggleVariants(idx,type){
   panel.innerHTML=h;
   panel.classList.add('show');
 
+  /* 해당 버튼만 active */
   var btns=document.getElementById('card-'+idx).querySelectorAll('.var-btn');
   for(var b=0;b<btns.length;b++){
     if((type==='color'&&btns[b].textContent==='다른 컬러')||(type==='size'&&btns[b].textContent==='다른 사이즈'))
@@ -790,12 +805,14 @@ var ADV_FILTERS=[
 
 var SIZE_ORDER=['XXS','XS','S','M','L','XL','XXL','2XL','3XL','4XL','5XL','6XL'];
 
+/** 두 줄이면 두 번째 줄, 한 줄이면 그 값 자체 */
 function getLine2(val){
   if(!val)return '';
   var idx=val.indexOf('\n');
   return idx>=0?val.substring(idx+1).trim():val;
 }
 
+/** 첫 번째 줄 (유럽사이즈) */
 function getLine1(val){
   if(!val)return '';
   var idx=val.indexOf('\n');
@@ -805,14 +822,17 @@ function getLine1(val){
 function getFilterVal(rec,filter){
   var v=rec[filter.key]||'';
   if(filter.line2)v=getLine2(v);
+  /* 불가시 문자/공백 정규화 */
   return v.replace(/[\s\u00A0\u200B]+/g,' ').trim();
 }
 
+/** 사이즈 정렬: SIZE_ORDER 기준, 없으면 끝에 알파벳순 */
 function sizeSort(a,b){
   var ai=SIZE_ORDER.indexOf(a),bi=SIZE_ORDER.indexOf(b);
   if(ai>=0&&bi>=0)return ai-bi;
   if(ai>=0)return-1;
   if(bi>=0)return 1;
+  /* 숫자 사이즈 비교 (38,40,42...) */
   var an=parseFloat(a),bn=parseFloat(b);
   if(!isNaN(an)&&!isNaN(bn))return an-bn;
   if(!isNaN(an))return 1;
@@ -820,6 +840,7 @@ function sizeSort(a,b){
   return a<b?-1:a>b?1:0;
 }
 
+/** 현재 필터값 읽기 (auto/select 통합) */
 function getAdvVal(filter){
   if(filter.auto)return document.getElementById(filter.id).value;
   return document.getElementById(filter.id).value;
@@ -832,6 +853,7 @@ function openAdvSearch(){
   histPush();
 }
 
+/** select 변경 시 스크롤 위치 보존 */
 function onAdvSelect(sel){
   var body=document.getElementById('advBody');
   var st=body.scrollTop;
@@ -841,16 +863,19 @@ function onAdvSelect(sel){
 
 function closeAdvSearch(){
   document.getElementById('advOverlay').classList.remove('show');
+  /* 자동완성 드롭다운 닫기 */
   var lists=document.querySelectorAll('.adv-auto-list');
   for(var i=0;i<lists.length;i++)lists[i].classList.remove('show');
 }
 
+/** 위탁상품 제외 체크 */
 function isConsignExcluded(rec){
   if(!document.getElementById('af-consign').checked)return false;
   var b=rec.b||rec.brand||'';
   return b.charAt(0)==='-';
 }
 
+/** 연동 드롭다운 + 자동완성 옵션 재구성 */
 function buildFilterOptions(){
   if(!inventory)return;
   for(var f=0;f<ADV_FILTERS.length;f++){
@@ -868,7 +893,8 @@ function buildFilterOptions(){
     }
 
     if(filter.sizeFormat){
-      var sizeMap={};
+      /* 사이즈: 스탠다드(유럽) 형태로 수집 — 동일 스탠다드에 여러 유럽사이즈 수집 */
+      var sizeMap={}; /* std → {eur1:true, eur2:true} */
       for(var i=0;i<inventory.length;i++){
         var rec=inventory[i];
         if(isConsignExcluded(rec))continue;
@@ -895,6 +921,7 @@ function buildFilterOptions(){
       sel.innerHTML=h;
       if(curVal&&sizeMap[curVal])sel.value=curVal;else sel.value='';
     }else{
+      /* 일반 드롭다운 */
       var vals={};
       for(var i2=0;i2<inventory.length;i2++){
         var rec2=inventory[i2];
@@ -918,6 +945,7 @@ function buildFilterOptions(){
   }
 }
 
+/** 자동완성: 다른 필터 조건으로 필터링된 데이터에서 입력 텍스트에 매칭되는 값 표시 */
 function onAutoInput(autoId){
   var filter=null;
   for(var f=0;f<ADV_FILTERS.length;f++){if(ADV_FILTERS[f].autoId===autoId){filter=ADV_FILTERS[f];break}}
@@ -929,6 +957,7 @@ function onAutoInput(autoId){
 
   if(!q){list.classList.remove('show');list.innerHTML='';return}
 
+  /* 다른 필터 조건 수집 */
   var otherFilters=[];
   for(var o=0;o<ADV_FILTERS.length;o++){
     if(ADV_FILTERS[o].id===filter.id)continue;
@@ -936,6 +965,7 @@ function onAutoInput(autoId){
     if(ov)otherFilters.push({filter:ADV_FILTERS[o],val:ov});
   }
 
+  /* 매칭 값 수집 */
   var vals={};
   for(var i=0;i<inventory.length;i++){
     var rec=inventory[i];
@@ -954,6 +984,7 @@ function onAutoInput(autoId){
 
   var h='';
   for(var j=0;j<sorted.length&&j<30;j++){
+    /* 매칭 부분 하이라이트 */
     var orig=sorted[j];
     var lw=orig.toLowerCase();
     var mi=lw.indexOf(q);
@@ -1058,11 +1089,13 @@ function doAdvSearch(){
   }
 }
 
+/* 자동완성 항목 클릭 (이벤트 위임) */
 document.addEventListener('click',function(e){
   var item=e.target.closest('.adv-auto-item');
   if(item&&item.dataset.auto&&item.dataset.val){
     selectAutoVal(item.dataset.auto,item.dataset.val);return;
   }
+  /* 자동완성 외부 클릭 시 목록 닫기 */
   if(!e.target.closest('.adv-auto')){
     var lists=document.querySelectorAll('.adv-auto-list');
     for(var i=0;i<lists.length;i++)lists[i].classList.remove('show');
@@ -1080,8 +1113,10 @@ function unlockAudio(){
 document.addEventListener('touchstart',unlockAudio,{passive:true});
 document.addEventListener('click',unlockAudio,{passive:true});
 
+/* iOS fallback: HTML5 Audio (링거 스위치 OFF에서도 미디어 볼륨으로 재생) */
 var beepAudio=null;
 try{
+  /* 800Hz 단음 0.2초 WAV 생성 */
   var sampleRate=44100,duration=0.2,freq=800;
   var numSamples=Math.floor(sampleRate*duration);
   var buf=new ArrayBuffer(44+numSamples*2);
@@ -1104,9 +1139,11 @@ try{
 }catch(e){}
 
 function playBeep(){
+  /* iOS: HTML5 Audio 우선 시도 */
   if(beepAudio){
     try{beepAudio.currentTime=0;beepAudio.play().catch(function(){})}catch(e){}
   }
+  /* Android: AudioContext 비프음 */
   if(!audioCtx)return;unlockAudio();
   setTimeout(function(){try{var t=audioCtx.currentTime;
     var o1=audioCtx.createOscillator(),g1=audioCtx.createGain();
@@ -1129,12 +1166,12 @@ function confirmFeedback(){
 var allCameras=[],currentCamIndex=0;
 var scanVideo,cropCanvas,cropCtx,nativeDetector,scanTimer;
 var scanned=false,lastCode='',matchCount=0,torchOn=false,activeTrack=null;
-var scanMode='search';
-var moveScannedItems={};
+var scanMode='search'; /* 'search' | 'move' */
+var moveScannedItems={}; /* {code: qty} */
 var moveScannedTotal=0;
-var lastConfirmedCode='';
-var emptyFrames=0;
-var EMPTY_THRESHOLD=15;
+var lastConfirmedCode=''; /* 이동모드: 마지막 확정 코드 (같은 바코드 연속 방지) */
+var emptyFrames=0; /* 바코드 미감지 연속 프레임 수 */
+var EMPTY_THRESHOLD=15; /* 이 횟수 이상 빈 프레임이어야 해제 (~1.5초) */
 
 function openScanner(mode){
   scanMode=mode||'search';
@@ -1143,6 +1180,7 @@ function openScanner(mode){
   document.getElementById('btnTorch').classList.remove('active');
   document.getElementById('scannerOverlay').classList.add('show');
 
+  /* 스캔 바 애니메이션 거리를 가이드 박스 높이에 맞춰 설정 (GPU 가속) */
   setTimeout(function(){
     var guide=document.querySelector('.sc-guide');
     var line=document.querySelector('.sc-guide-line');
@@ -1175,6 +1213,7 @@ function closeScanner(){
 }
 
 function closeScannerBtn(){
+  /* 이동모드에서 스캔 데이터가 있으면 경고 */
   if(scanMode==='move'&&moveScannedTotal>0&&!scanFromReview){
     if(!confirm('스캔한 '+moveScannedTotal+'건의 데이터가 초기화됩니다.\n정말 나가시겠습니까?'))return;
   }
@@ -1190,6 +1229,7 @@ function closeScannerBtn(){
 }
 
 function startMoveMode(){
+  /* 검색 결과에서 체크된 항목이 있으면 바로 리뷰로 */
   var checked=document.querySelectorAll('.card-cb:checked');
   if(checked.length>0){
     moveScannedItems={};moveScannedTotal=0;
@@ -1225,6 +1265,7 @@ function updateSelCount(){
 var scanFromReview=false;
 
 function resumeMoveScan(){
+  /* 리뷰에서 스캐너로 복귀 (기존 스캔 데이터 유지) */
   scanFromReview=true;
   document.getElementById('reviewOverlay').classList.remove('show');
   scanMode='move';
@@ -1270,6 +1311,13 @@ function toggleTorch(){
 
 function onCodeRead(code){
   if(scanned&&scanMode==='search')return;
+  if(scanMode==='location'){
+    /* 위치 스캔: 1회 인식 즉시 확정 */
+    document.getElementById('locInput').value=code;
+    closeScanner();
+    document.getElementById('locModal').classList.add('show');
+    return;
+  }
   if(scanMode==='move'&&code===lastConfirmedCode)return;
   if(code!==lastConfirmedCode)lastConfirmedCode='';
   if(code===lastCode)matchCount++;else{lastCode=code;matchCount=1}
@@ -1277,17 +1325,42 @@ function onCodeRead(code){
   if(matchCount>=CONFIRM_COUNT)onScanConfirmed(code);
 }
 
+function openLocScanner(){
+  document.getElementById('locModal').classList.remove('show');
+  scanMode='location';
+  scanned=false;lastCode='';matchCount=0;lastConfirmedCode='';
+  scReadEl.textContent='';scCamInfoEl.textContent='';
+  document.getElementById('scTitle').textContent='📍 위치 QR 스캔';
+  document.getElementById('scCounter').classList.remove('show');
+  document.getElementById('btnScanDone').classList.remove('show');
+  document.getElementById('scannerOverlay').classList.add('show');
+  setTimeout(function(){
+    var guide=document.querySelector('.sc-guide');
+    var line=document.querySelector('.sc-guide-line');
+    if(guide&&line){
+      var h=guide.offsetHeight;
+      line.style.setProperty('--scan-dist',(h*0.7)+'px');
+      line.classList.add('animate');
+    }
+  },50);
+  if(useNative)initAndroidScanner();else initIOSScanner();
+}
+
 function onScanConfirmed(code){
   if(scanMode==='move'){
+    /* 이동 모드: 아이템 추가 후 계속 스캔 */
     confirmFeedback();
     moveScannedItems[code]=(moveScannedItems[code]||0)+1;
     moveScannedTotal++;
     document.getElementById('scCnt').textContent='스캔: '+moveScannedTotal+'건 ('+Object.keys(moveScannedItems).length+'종)';
     document.getElementById('scLast').textContent='마지막: '+code;
+    /* 스캔 리셋 — 다른 바코드 스캔 가능, 같은 바코드는 카메라 이동 후 재스캔 가능 */
     lastConfirmedCode=code;
     scanned=false;matchCount=0;scReadEl.textContent='';
     return;
   }
+
+  /* 검색 모드: 기존 동작 */
   if(scanned)return;scanned=true;
   confirmFeedback();closeScanner();
   qEl.value=code;doSearch();
@@ -1392,8 +1465,17 @@ function restartQuagga(idx){try{Quagga.stop()}catch(e){}stopIOSQrScan();var cam=
 
 function renderReviewTable(){
   var keys=Object.keys(moveScannedItems);
-  var h='<table class="rv-table"><thead><tr>'+
-    '<th style="width:30px"><input type="checkbox" checked onchange="toggleAllCb(this)"></th>'+
+  var totalQty=0,totalKind=keys.length;
+  for(var k=0;k<keys.length;k++)totalQty+=moveScannedItems[keys[k]];
+
+  var h='<div class="rv-summary">'+
+    '<span class="rv-sum-item"><span class="rv-sum-label">품목 수</span><span class="rv-sum-val">'+totalKind+'종</span></span>'+
+    '<span class="rv-sum-divider"></span>'+
+    '<span class="rv-sum-item"><span class="rv-sum-label">총 수량</span><span class="rv-sum-val accent">'+totalQty+'개</span></span>'+
+    '</div>';
+
+  h+='<table class="rv-table"><thead><tr>'+
+    '<th style="width:30px"><input type="checkbox" checked onchange="toggleAllCb(this);updateSummary()"></th>'+
     '<th>품목코드</th><th>품목명</th><th>상품위치</th>'+
     '<th style="width:55px;text-align:center">수량</th></tr></thead><tbody>';
   for(var i=0;i<keys.length;i++){
@@ -1401,7 +1483,7 @@ function renderReviewTable(){
     var info=findItemByCode(code);
     var name=info.name||'-';
     var loc=info.loc||'-';
-    h+='<tr><td><input type="checkbox" class="rv-cb" checked data-code="'+esc(code)+'"></td>'+
+    h+='<tr><td><input type="checkbox" class="rv-cb" checked data-code="'+esc(code)+'" onchange="updateSummary()"></td>'+
       '<td class="code-cell">'+esc(code)+'</td>'+
       '<td class="name-cell">'+esc(name)+'</td>'+
       '<td class="loc-cell">'+esc(loc)+'</td>'+
@@ -1425,6 +1507,26 @@ function findLocationByCode(code){
   return info.loc||'-';
 }
 
+function updateSummary(){
+  var keys=Object.keys(moveScannedItems);
+  var checkedQty=0,checkedKind=0;
+  var cbs=document.querySelectorAll('.rv-cb');
+  for(var c=0;c<cbs.length;c++){
+    if(cbs[c].checked){
+      var code=cbs[c].getAttribute('data-code');
+      checkedQty+=moveScannedItems[code]||0;
+      checkedKind++;
+    }
+  }
+  var sumEl=document.querySelector('.rv-summary');
+  if(sumEl){
+    sumEl.innerHTML=
+      '<span class="rv-sum-item"><span class="rv-sum-label">선택 품목</span><span class="rv-sum-val">'+checkedKind+'종</span></span>'+
+      '<span class="rv-sum-divider"></span>'+
+      '<span class="rv-sum-item"><span class="rv-sum-label">선택 수량</span><span class="rv-sum-val accent">'+checkedQty+'개</span></span>';
+  }
+}
+
 function updateQty(input){
   var code=input.getAttribute('data-code');
   var val=parseInt(input.value)||0;
@@ -1434,6 +1536,7 @@ function updateQty(input){
   moveScannedTotal+=(val-prev);
   var el=document.getElementById('scCnt');
   if(el)el.textContent='스캔: '+moveScannedTotal+'건 ('+Object.keys(moveScannedItems).length+'종)';
+  updateSummary();
 }
 
 function showReview(){
@@ -1482,6 +1585,7 @@ function executeConsign(){
   var cbs=document.querySelectorAll('.rv-cb:checked');
   if(cbs.length===0){alert('이동할 상품을 선택해 주세요.');return}
   document.getElementById('consignInput').value='';
+  /* 오늘 날짜를 기본값으로 */
   var today=new Date();
   var yyyy=today.getFullYear(),mm=String(today.getMonth()+1).padStart(2,'0'),dd=String(today.getDate()).padStart(2,'0');
   document.getElementById('consignDate').value=yyyy+'-'+mm+'-'+dd;
@@ -1528,18 +1632,22 @@ function doConsign(){
     document.getElementById('resultIcon').textContent=fc.length>0?'⚠️':'✅';
     document.getElementById('resultTitle').textContent='위탁처 출고 완료';
 
-    /* ★ 각 행 바로 아래에 해당 상세 섹션 인라인 삽입 */
     var rows='';
     rows+='<div class="result-row loc"><span class="rlabel">위탁처</span><span class="rvalue">'+esc(dest)+'</span></div>';
     rows+='<div class="result-row loc"><span class="rlabel">출고일</span><span class="rvalue">'+esc(date)+'</span></div>';
     rows+='<div class="result-row req"><span class="rlabel">요청</span><span class="rvalue">'+req+'건</span></div>';
     rows+='<div class="result-row ok"><span class="rlabel">처리</span><span class="rvalue">'+sc.length+'건 <span class="detail-link" onclick="toggleDetail(\'okDetail\')">상세보기</span></span></div>';
-    rows+='<div class="detail-section" id="okDetail"><div class="dt">처리 완료 품목코드</div><div class="dc">'+(sc.length>0?sc.join('<br>'):'없음')+'</div></div>';
     if(fc.length>0){
       rows+='<div class="result-row fail"><span class="rlabel">실패</span><span class="rvalue">'+fc.length+'건 <span class="detail-link" onclick="toggleDetail(\'failDetail\')">상세보기</span></span></div>';
-      rows+='<div class="detail-section fail-detail" id="failDetail"><div class="dt">미등록 품목코드</div><div class="dc">'+fc.join('<br>')+'</div></div>';
     }
     document.getElementById('resultRows').innerHTML=rows;
+
+    var detail='';
+    detail+='<div class="detail-section" id="okDetail"><div class="dt">처리 완료 품목코드</div><div class="dc">'+(sc.length>0?sc.join('<br>'):'없음')+'</div></div>';
+    if(fc.length>0){
+      detail+='<div class="detail-section fail-detail" id="failDetail"><div class="dt">미등록 품목코드</div><div class="dc">'+fc.join('<br>')+'</div></div>';
+    }
+    document.getElementById('resultDetail').innerHTML=detail;
 
     document.getElementById('reviewOverlay').classList.remove('show');
     document.getElementById('scannerOverlay').classList.remove('show');
@@ -1564,6 +1672,7 @@ var skipNextPopstate=false;
 function histPush(){historyDepth++;history.pushState({app:historyDepth},'');}
 function histBack(){if(historyDepth>0)history.back()}
 
+/* 뒤로가기 시 최상위 오버레이 닫기 */
 window.addEventListener('popstate',function(){
   if(skipNextPopstate){skipNextPopstate=false;return}
   if(historyDepth>0)historyDepth--;
@@ -1587,8 +1696,10 @@ window.addEventListener('popstate',function(){
     }
     review.classList.remove('show');
   }else if(scanner.classList.contains('show')){
+    /* 이동모드에서 스캔 데이터가 있으면 경고 */
     if(scanMode==='move'&&moveScannedTotal>0&&!scanFromReview){
       if(!confirm('스캔한 '+moveScannedTotal+'건의 데이터가 초기화됩니다.\n정말 나가시겠습니까?')){
+        /* 취소 → history 복원 */
         histPush();return;
       }
     }
@@ -1602,22 +1713,29 @@ window.addEventListener('popstate',function(){
   }
 });
 
+/* 열기: histPush */
 var _o1=openScanner;openScanner=function(m){histPush();_o1(m)};
 var _o2=promptLocation;promptLocation=function(){histPush();_o2()};
 
+/* showReview: scanner를 닫고 review를 여는데 history 깊이는 유지 (교체) */
 var _o3=showReview;showReview=function(){_o3()};
 
+/* 닫기 버튼: histBack (popstate가 실제 닫기 처리) */
 document.querySelector('.rv-close').setAttribute('onclick','histBack()');
 document.querySelector('.modal-cancel').setAttribute('onclick','histBack()');
 
+/* 상품이동 완료 후 모든 overlay 닫고 history 초기화 */
 var _execMove=executeMove;
 executeMove=function(){
   var location=document.getElementById('locInput').value.trim();
 
+  /* 모달을 먼저 닫고 confirm 표시 (iOS Safari 호환) */
   document.getElementById('locModal').classList.remove('show');
 
+  /* 빈 입력 → 상품위치 삭제 확인 */
   if(!location){
     if(!window.confirm('상품위치 정보를 삭제하시겠습니까?')){
+      /* 취소 → 모달 다시 열기 */
       document.getElementById('locModal').classList.add('show');
       return;
     }
@@ -1646,6 +1764,7 @@ executeMove=function(){
       for(var ri=0;ri<inventory.length;ri++){if(mc[inventory[ri].c])inventory[ri].p=location}
     }
 
+    /* 결과 화면 표시 */
     var isDelete=!location;
     var sc=res.successCodes||[];
     var fc=res.failedCodes||[];
@@ -1654,17 +1773,21 @@ executeMove=function(){
     document.getElementById('resultIcon').textContent=fc.length>0?'⚠️':'✅';
     document.getElementById('resultTitle').textContent=isDelete?'상품위치 삭제 완료':'상품 이동 완료';
 
-    /* ★ 각 행 바로 아래에 해당 상세 섹션 인라인 삽입 */
     var rows='';
     if(!isDelete)rows+='<div class="result-row loc"><span class="rlabel">위치</span><span class="rvalue">'+esc(res.location)+'</span></div>';
     rows+='<div class="result-row req"><span class="rlabel">요청</span><span class="rvalue">'+req+'건</span></div>';
     rows+='<div class="result-row ok"><span class="rlabel">처리</span><span class="rvalue">'+sc.length+'건 <span class="detail-link" onclick="toggleDetail(\'okDetail\')">상세보기</span></span></div>';
-    rows+='<div class="detail-section" id="okDetail"><div class="dt">처리 완료 품목코드</div><div class="dc">'+(sc.length>0?sc.join('<br>'):'없음')+'</div></div>';
     if(fc.length>0){
       rows+='<div class="result-row fail"><span class="rlabel">실패</span><span class="rvalue">'+fc.length+'건 <span class="detail-link" onclick="toggleDetail(\'failDetail\')">상세보기</span></span></div>';
-      rows+='<div class="detail-section fail-detail" id="failDetail"><div class="dt">실패 품목코드 (Data/Data2에 없음)</div><div class="dc">'+fc.join('<br>')+'</div></div>';
     }
     document.getElementById('resultRows').innerHTML=rows;
+
+    var detail='';
+    detail+='<div class="detail-section" id="okDetail"><div class="dt">처리 완료 품목코드</div><div class="dc">'+(sc.length>0?sc.join('<br>'):'없음')+'</div></div>';
+    if(fc.length>0){
+      detail+='<div class="detail-section fail-detail" id="failDetail"><div class="dt">실패 품목코드 (Data/Data2에 없음)</div><div class="dc">'+fc.join('<br>')+'</div></div>';
+    }
+    document.getElementById('resultDetail').innerHTML=detail;
 
     document.getElementById('reviewOverlay').classList.remove('show');
     document.getElementById('scannerOverlay').classList.remove('show');
@@ -1687,6 +1810,7 @@ function closeResult(){
   historyDepth=0;
 }
 
+/* 안드로이드 키보드 대응: 모달을 키보드 위로 이동 */
 if(window.visualViewport){
   var modalBox=null;
   window.visualViewport.addEventListener('resize',function(){
