@@ -1149,17 +1149,23 @@ var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
 
 function unlockAudio(){
   if(audioUnlocked)return;
+  audioUnlocked=true;
   if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(function(){});
-  /* iOS만 HTML5 Audio unlock 필요 (Android는 AudioContext만 사용) */
+  /* iOS만 HTML5 Audio unlock 필요 */
   if(isIOS&&beepAudio){
     try{
-      beepAudio.muted=true;
-      beepAudio.play().then(function(){
-        beepAudio.pause();beepAudio.currentTime=0;beepAudio.muted=false;
-      }).catch(function(){beepAudio.muted=false});
+      var origVol=beepAudio.volume;
+      beepAudio.volume=0;
+      var p=beepAudio.play();
+      if(p&&p.then){
+        p.then(function(){
+          beepAudio.pause();
+          beepAudio.currentTime=0;
+          beepAudio.volume=origVol;
+        }).catch(function(){beepAudio.volume=origVol});
+      }
     }catch(e){}
   }
-  audioUnlocked=true;
 }
 document.addEventListener('touchstart',unlockAudio,{passive:true,once:true});
 document.addEventListener('click',unlockAudio,{passive:true,once:true});
