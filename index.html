@@ -1794,11 +1794,6 @@ executeMove=function(){
     if(fc.length>0){
       rows+='<div class="result-row fail"><span class="rlabel">실패</span><span class="rvalue">'+fc.length+'건 <span class="detail-link" onclick="toggleDetail(\'failDetail\')">상세보기</span></span></div>';
     }
-    if(res.timings){
-      var t=res.timings;
-      var tStr='총 '+t.total+'ms (open:'+t.open+' / hdr:'+t.headers+'['+(t.hdrCache||'?')+'] / read:'+t.read+' / match:'+t.match+' / write:'+t.write+' ['+t.writeCount+'셀] / cache:'+t.cacheClear+')';
-      rows+='<div class="result-row" style="color:#9ba1b5;font-size:10px;line-height:1.4"><span class="rlabel">⏱</span><span class="rvalue" style="word-break:break-all">'+tStr+'</span></div>';
-    }
     document.getElementById('resultRows').innerHTML=rows;
 
     var detail='';
