@@ -199,8 +199,7 @@
     /* 스캔 카운터 (이동 모드) */
     .sc-counter{background:rgba(15,17,23,.85);padding:8px 16px;text-align:center;z-index:425;display:none}
     .sc-counter.show{display:block}
-    .sc-toggle-wrap{background:rgba(15,17,23,.85);padding:8px 16px;text-align:center;z-index:425;
-      -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+    .sc-toggle-wrap{padding:8px 0 4px;text-align:center}
     .sc-toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;-webkit-user-select:none}
     .sc-toggle input{display:none}
     .sc-toggle-slider{width:36px;height:20px;background:rgba(255,255,255,.2);border-radius:10px;
@@ -209,7 +208,7 @@
       background:#fff;border-radius:50%;transition:transform .2s}
     .sc-toggle input:checked+.sc-toggle-slider{background:var(--accent)}
     .sc-toggle input:checked+.sc-toggle-slider::after{transform:translateX(16px)}
-    .sc-toggle-label{font-size:12px;color:#fff}
+    .sc-toggle-label{font-size:11px;color:var(--text2)}
     .sc-counter .cnt{font-size:14px;font-weight:700;color:var(--orange)}
     .sc-counter .last{font-size:11px;color:var(--text2);margin-top:2px}
 
@@ -465,13 +464,6 @@
     <div class="cnt" id="scCnt">스캔: 0건</div>
     <div class="last" id="scLast"></div>
   </div>
-  <div class="sc-toggle-wrap">
-    <label class="sc-toggle">
-      <input type="checkbox" id="allFormatsToggle" onchange="toggleAllFormats(this)">
-      <span class="sc-toggle-slider"></span>
-      <span class="sc-toggle-label">모든 바코드 형식 인식</span>
-    </label>
-  </div>
   <div class="sc-camera" id="androidCam"><video id="scanVideo" autoplay playsinline muted></video></div>
   <div class="sc-guide-wrap" id="scanGuide"><div class="sc-guide"><div class="sc-guide-line"></div></div></div>
   <div id="iosScanner"></div>
@@ -479,6 +471,13 @@
     <div class="sc-hint">바코드를 카메라에 비춰주세요</div>
     <div class="sc-read" id="scRead"></div>
     <div class="sc-cam-info" id="scCamInfo"></div>
+    <div class="sc-toggle-wrap" id="scToggleWrap">
+      <label class="sc-toggle">
+        <input type="checkbox" id="allFormatsToggle" onchange="toggleAllFormats(this)">
+        <span class="sc-toggle-slider"></span>
+        <span class="sc-toggle-label">모든 바코드 형식 인식</span>
+      </label>
+    </div>
     <button class="btn-scan-done" id="btnScanDone" onclick="showReview()">📋 스캔 완료</button>
   </div>
 </div>
@@ -1176,25 +1175,19 @@ var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
 
 function unlockAudio(){
   if(audioUnlocked)return;
-  audioUnlocked=true;
   if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(function(){});
-  /* iOS: 풀 전체 unlock — muted 속성으로 무음 보장 후 재생 */
+  /* iOS: 풀 인스턴스를 순차로 unlock (각각 muted=true 상태로 play→pause) */
   if(isIOS&&beepPool.length>0){
     for(var i=0;i<beepPool.length;i++){
-      (function(a){
-        try{
-          a.muted=true;
-          a.volume=0;
-          var p=a.play();
-          if(p&&p.then){
-            p.then(function(){
-              a.pause();a.currentTime=0;a.muted=false;a.volume=1.0;
-            }).catch(function(){a.muted=false;a.volume=1.0});
-          }
-        }catch(e){}
-      })(beepPool[i]);
+      var a=beepPool[i];
+      a.muted=true;
+      try{
+        var p=a.play();
+        if(p&&p.then)p.then(function(audio){return function(){audio.pause();audio.currentTime=0;audio.muted=false}}(a)).catch(function(audio){return function(){audio.muted=false}}(a));
+      }catch(e){a.muted=false}
     }
   }
+  audioUnlocked=true;
 }
 document.addEventListener('touchstart',unlockAudio,{passive:true,once:true});
 document.addEventListener('click',unlockAudio,{passive:true,once:true});
@@ -1238,6 +1231,7 @@ try{
 function playBeep(){
   /* iOS: HTML5 Audio Pool 사용 (연속 재생 안정화) */
   if(isIOS){
+    if(!audioUnlocked)return; /* 사용자 제스처 전이면 스킵 (소리 누출 방지) */
     if(beepPool.length>0){
       try{
         var audio=beepPool[beepPoolIdx];
@@ -1294,7 +1288,14 @@ function isValidCode(code){
 
 function toggleAllFormats(cb){
   allFormatsMode=cb.checked;
-  showToast(allFormatsMode?'모든 바코드 형식 인식 ON':'기본 형식만 인식 (Code 128, EAN-13)');
+  /* 위치 모드면 QR 관련 메시지 */
+  var msg;
+  if(scanMode==='location'){
+    msg=allFormatsMode?'모든 형식 인식 ON (QR + 바코드)':'기본: QR 코드 인식';
+  }else{
+    msg=allFormatsMode?'모든 바코드 형식 인식 ON':'기본 형식만 인식 (Code 128, EAN-13)';
+  }
+  showToast(msg);
   /* QuaggaJS 재시작 (새 디코더 적용) */
   if(!useNative&&document.getElementById('scannerOverlay').classList.contains('show')){
     restartQuagga(currentCamIndex);
@@ -1473,6 +1474,7 @@ function onCodeRead(code){
     /* 위치 모드는 QR이라 검증 스킵 */
     if(scanned)return;
     scanned=true;
+    confirmFeedback();
     document.getElementById('locInput').value=code;
     closeScanner();
     if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back();}
