@@ -207,9 +207,9 @@
     .sc-toggle:active{background:rgba(255,255,255,.1)}
     .sc-toggle input{display:none}
     .sc-toggle-slider{width:46px;height:26px;background:rgba(255,255,255,.2);border-radius:13px;
-      position:relative;transition:background .2s;flex-shrink:0}
+      position:relative;transition:background .05s;flex-shrink:0}
     .sc-toggle-slider::after{content:'';position:absolute;top:2px;left:2px;width:22px;height:22px;
-      background:#fff;border-radius:50%;transition:transform .2s}
+      background:#fff;border-radius:50%;transition:transform .05s}
     .sc-toggle input:checked+.sc-toggle-slider{background:var(--accent)}
     .sc-toggle input:checked+.sc-toggle-slider::after{transform:translateX(20px)}
     .sc-toggle-label{font-size:13px;color:#fff;font-weight:500}
@@ -1545,10 +1545,10 @@ function onCodeRead(code){
   /* 형식 검증 (오인식 방지, 모든 형식 모드에선 완화) */
   if(!isValidCode(code))return;
   if(scanMode==='move'){
-    /* 같은 코드는 1.5초 cooldown */
+    /* 같은 코드는 3초 cooldown */
     if(code===lastConfirmedCode){
       var now=Date.now();
-      if(now-lastConfirmedTime<1500)return;
+      if(now-lastConfirmedTime<3000)return;
       lastConfirmedCode=''; /* cooldown 지나면 해제 */
     }
   }
@@ -1604,7 +1604,7 @@ function startWatchdog(){
       }
     }
     /* 이동모드: cooldown 체크는 idle과 무관하게 */
-    if(scanMode==='move'&&lastConfirmedCode&&Date.now()-lastConfirmedTime>1500){
+    if(scanMode==='move'&&lastConfirmedCode&&Date.now()-lastConfirmedTime>3000){
       lastConfirmedCode='';
     }
   },200);
@@ -1694,7 +1694,7 @@ function _buildScanner(){
 
 function _scanConfig(useCamId){
   var cfg={
-    fps:8, /* ZXing이 처리할 시간 충분히 */
+    fps:20, /* Android BarcodeDetector는 빠르게 처리 가능 */
     qrbox:undefined,
     aspectRatio:1.7777,
     disableFlip:true
@@ -1783,10 +1783,11 @@ function _captureActiveTrack(){
 
 function stopScanner(){
   stopWatchdog();
-  /* iOS: QuaggaJS + jsQR 정지 */
+  /* iOS: QuaggaJS + jsQR 정지 (또는 QR-only 정지) */
   if(isIOS){
+    /* Quagga가 init되어 있으면 stop, QR-only면 별도 정지 */
     try{Quagga.stop()}catch(e){}
-    stopIOSQrScan();
+    stopIOSQROnly();
     activeTrack=null;
     return;
   }
@@ -1841,11 +1842,57 @@ function startIOSQrScan(){
       /* 검색/이동 모드는 onCodeRead로 (CONFIRM_COUNT 누적) */
       onCodeRead(qr.data);
     }
-  },250);
+  },100); /* 100ms = 10 fps (jsQR 단독 모드에서 빠른 인식) */
 }
 
 function stopIOSQrScan(){
   if(iosQrTimer){clearInterval(iosQrTimer);iosQrTimer=null}
+}
+
+function initIOSQROnly(){
+  /* QR 전용 모드: getUserMedia로 video 직접 만들고 jsQR만 작동 */
+  var container=document.getElementById('iosScanner');
+  /* 기존 비디오 제거 후 새로 생성 */
+  container.innerHTML='';
+  var video=document.createElement('video');
+  video.setAttribute('playsinline','true');
+  video.setAttribute('autoplay','true');
+  video.muted=true;
+  video.style.cssText='width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0';
+  container.appendChild(video);
+
+  navigator.mediaDevices.getUserMedia({
+    video:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}},
+    audio:false
+  })
+  .catch(function(){
+    /* fallback: loose */
+    return navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}},
+      audio:false
+    });
+  })
+  .then(function(stream){
+    video.srcObject=stream;
+    activeTrack=stream.getVideoTracks()[0];
+    return video.play();
+  })
+  .then(function(){
+    startIOSQrScan();
+  })
+  .catch(function(err){
+    console.error('iOS QR-only camera fail:',err);
+  });
+}
+
+function stopIOSQROnly(){
+  stopIOSQrScan();
+  var v=document.querySelector('#iosScanner video');
+  if(v&&v.srcObject){
+    v.srcObject.getTracks().forEach(function(t){t.stop()});
+    v.srcObject=null;
+  }
+  activeTrack=null;
 }
 
 function getActiveReaders(){
@@ -1859,10 +1906,17 @@ function initIOSScanner(){
   document.getElementById('html5Reader').style.display='none';
   document.getElementById('iosScanner').style.display='block';
   document.getElementById('scanGuide').style.display='flex';
+
+  /* 위치 모드 + 토글 OFF: Quagga 비활성, jsQR만 사용 (속도/배터리 최적화) */
+  if(scanMode==='location'&&!allFormatsMode){
+    initIOSQROnly();
+    return;
+  }
+
   Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
     constraints:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}}},
     decoder:{readers:getActiveReaders()},
-    locate:true,frequency:10,numOfWorkers:0
+    locate:true,frequency:20,numOfWorkers:0
   },function(err){
     if(err){
       console.warn('exact environment failed, retrying loose:',err);
@@ -1870,7 +1924,7 @@ function initIOSScanner(){
       Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
         constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
         decoder:{readers:getActiveReaders()},
-        locate:true,frequency:10,numOfWorkers:0
+        locate:true,frequency:20,numOfWorkers:0
       },function(err2){
         if(err2){console.error('Quagga init fail:',err2);return}
         Quagga.start();
@@ -1899,18 +1953,24 @@ function initIOSScanner(){
 }
 
 function restartQuagga(){
-  try{Quagga.stop()}catch(e){}stopIOSQrScan();
+  /* 위치 모드 + 토글 OFF: QR-only 재시작 */
+  try{Quagga.stop()}catch(e){}
+  stopIOSQROnly();
   setTimeout(function(){
+    if(scanMode==='location'&&!allFormatsMode){
+      initIOSQROnly();
+      return;
+    }
     Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
       constraints:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}}},
       decoder:{readers:getActiveReaders()},
-      locate:true,frequency:10,numOfWorkers:0},function(err){
+      locate:true,frequency:20,numOfWorkers:0},function(err){
         if(err){
           /* fallback: loose */
           Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
             constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
             decoder:{readers:getActiveReaders()},
-            locate:true,frequency:10,numOfWorkers:0},function(err2){
+            locate:true,frequency:20,numOfWorkers:0},function(err2){
               if(err2){startIOSQrScan();return}
               Quagga.start();activeTrack=null;
               try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
