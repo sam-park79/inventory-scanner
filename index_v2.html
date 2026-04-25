@@ -1860,11 +1860,25 @@ function initIOSScanner(){
   document.getElementById('iosScanner').style.display='block';
   document.getElementById('scanGuide').style.display='flex';
   Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
-    constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
+    constraints:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}}},
     decoder:{readers:getActiveReaders()},
     locate:true,frequency:10,numOfWorkers:0
   },function(err){
-    if(err){console.error('Quagga init fail:',err);return}
+    if(err){
+      console.warn('exact environment failed, retrying loose:',err);
+      /* fallback: loose environment */
+      Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
+        constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
+        decoder:{readers:getActiveReaders()},
+        locate:true,frequency:10,numOfWorkers:0
+      },function(err2){
+        if(err2){console.error('Quagga init fail:',err2);return}
+        Quagga.start();
+        try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+        startIOSQrScan();
+      });
+      return;
+    }
     Quagga.start();
     try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
     startIOSQrScan();
@@ -1888,10 +1902,22 @@ function restartQuagga(){
   try{Quagga.stop()}catch(e){}stopIOSQrScan();
   setTimeout(function(){
     Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
-      constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
+      constraints:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}}},
       decoder:{readers:getActiveReaders()},
       locate:true,frequency:10,numOfWorkers:0},function(err){
-        if(err){startIOSQrScan();return}
+        if(err){
+          /* fallback: loose */
+          Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
+            constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
+            decoder:{readers:getActiveReaders()},
+            locate:true,frequency:10,numOfWorkers:0},function(err2){
+              if(err2){startIOSQrScan();return}
+              Quagga.start();activeTrack=null;
+              try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+              startIOSQrScan();
+            });
+          return;
+        }
         Quagga.start();activeTrack=null;
         try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
         startIOSQrScan();
