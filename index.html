@@ -1548,10 +1548,18 @@ function initIOSScanner(){
     startIOSQrScan();
     discoverCameras()});
   Quagga.onDetected(function(result){if(result.codeResult.code)onCodeRead(result.codeResult.code)});
-  var noDetectFrames=0;
   Quagga.onProcessed(function(result){
-    if(result&&result.codeResult&&result.codeResult.code){noDetectFrames=0}
-    else{noDetectFrames++;if(noDetectFrames>=15&&lastConfirmedCode){lastConfirmedCode='';noDetectFrames=0}}
+    if(result&&result.codeResult&&result.codeResult.code){
+      emptyFrames=0;
+    }else{
+      emptyFrames++;
+      if(emptyFrames>=EMPTY_THRESHOLD){
+        if(matchCount>0||lastConfirmedCode){
+          matchCount=0;lastCode='';lastConfirmedCode='';scReadEl.textContent='';
+        }
+        emptyFrames=0;
+      }
+    }
   });
 }
 function restartQuagga(idx){try{Quagga.stop()}catch(e){}stopIOSQrScan();var cam=allCameras[idx];
