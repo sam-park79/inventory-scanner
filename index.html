@@ -1548,7 +1548,7 @@ function renderReviewTable(){
       '<td class="name-cell">'+esc(name)+'</td>'+
       '<td class="loc-cell">'+esc(loc)+'</td>'+
       '<td style="text-align:center"><input type="number" class="qty-cell" data-code="'+esc(code)+
-      '" value="'+moveScannedItems[code]+'" min="1" onchange="updateQty(this)"></td></tr>';
+      '" value="'+moveScannedItems[code]+'" min="1" onchange="updateQty(this)" onfocus="this.select()" onclick="this.select()"></td></tr>';
   }
   h+='</tbody></table>';
   document.getElementById('rvBody').innerHTML=h;
@@ -1711,7 +1711,7 @@ function doConsign(){
 
     document.getElementById('reviewOverlay').classList.remove('show');
     document.getElementById('scannerOverlay').classList.remove('show');
-    document.getElementById('resultOverlay').classList.add('show');
+    document.getElementById('resultOverlay').classList.add('show');confirmFeedback();
   })
   .catch(function(err){
     document.getElementById('procOverlay').classList.remove('show');
@@ -1858,7 +1858,7 @@ executeMove=function(){
 
     document.getElementById('reviewOverlay').classList.remove('show');
     document.getElementById('scannerOverlay').classList.remove('show');
-    document.getElementById('resultOverlay').classList.add('show');
+    document.getElementById('resultOverlay').classList.add('show');confirmFeedback();
   })
   .catch(function(err){
     document.getElementById('procOverlay').classList.remove('show');
