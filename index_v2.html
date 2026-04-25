@@ -1618,19 +1618,36 @@ function startScanner(){
   var savedId='';try{savedId=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
 
   Html5Qrcode.getCameras().then(function(cams){
-    /* 후면 카메라만 필터링 */
-    html5Cameras=cams.filter(function(c){
+    console.log('[scanner] cameras:',cams.map(function(c){return c.label}).join(' | '));
+    /* 후면 카메라만 필터링 (전면 키워드 차단) */
+    var backCams=cams.filter(function(c){
       var l=(c.label||'').toLowerCase();
-      return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0;
+      return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0
+        &&l.indexOf('user')<0&&l.indexOf('face')<0;
     });
-    if(!html5Cameras.length)html5Cameras=cams;
+    /* 후면 키워드 우선 (back/rear/환경/후면) */
+    var prioritized=cams.filter(function(c){
+      var l=(c.label||'').toLowerCase();
+      return l.indexOf('back')>=0||l.indexOf('rear')>=0||l.indexOf('environment')>=0||l.indexOf('후면')>=0;
+    });
+    if(prioritized.length>0)html5Cameras=prioritized;
+    else if(backCams.length>0)html5Cameras=backCams;
+    else html5Cameras=cams;
+
     /* 외부 호환 */
     allCameras=html5Cameras.map(function(c){return{deviceId:c.id,label:c.label}});
 
+    /* savedId 검증: 필터링된 목록에 있어야만 사용 */
+    var matchedSaved=false;
     if(savedId){
       for(var i=0;i<html5Cameras.length;i++){
-        if(html5Cameras[i].id===savedId){currentCamIndex=i;break}
+        if(html5Cameras[i].id===savedId){currentCamIndex=i;matchedSaved=true;break}
       }
+    }
+    /* savedId가 전면이면 무시하고 첫번째 후면 사용 */
+    if(!matchedSaved){
+      currentCamIndex=0;
+      try{localStorage.removeItem('SCAN_CAM_ID')}catch(e){}
     }
     if(currentCamIndex>=html5Cameras.length)currentCamIndex=0;
 
@@ -1657,21 +1674,30 @@ function _buildScanner(){
 function _scanConfig(useCamId){
   /* iOS는 ZXing fallback이라 fps 너무 높이면 메인 스레드 부담 ↑ → 인식률 ↓ */
   var cfg={
-    fps:10, /* iOS ZXing 최적값 */
-    qrbox:undefined, /* qrbox 미설정 = 전체 비디오 영역 스캔 (ZXing은 어차피 전체 스캔) */
+    fps:10,
+    qrbox:undefined,
     aspectRatio:1.7777,
-    disableFlip:true /* 좌우반전 시도 비활성 → 디코드 시간 절반 */
+    disableFlip:true
   };
-  /* 카메라 해상도 강제: 낮은 해상도면 ZXing이 못 읽음 */
-  cfg.videoConstraints={
-    facingMode:useCamId?undefined:'environment',
-    width:{ideal:1920,min:1280},
-    height:{ideal:1080,min:720},
-    /* iOS Safari: 후면 카메라에서 자동 초점 활성화 */
-    focusMode:'continuous',
-    /* 노출 자동 조정 */
-    exposureMode:'continuous'
-  };
+  /* 카메라 해상도 강제 */
+  if(useCamId){
+    /* deviceId 사용 시: facingMode 빼야 함 (충돌 방지) */
+    cfg.videoConstraints={
+      width:{ideal:1920,min:1280},
+      height:{ideal:1080,min:720},
+      focusMode:'continuous',
+      exposureMode:'continuous'
+    };
+  }else{
+    /* facingMode 사용 시: 후면 카메라 강제 */
+    cfg.videoConstraints={
+      facingMode:{exact:'environment'}, /* exact = 후면 없으면 fail (전면 fallback 차단) */
+      width:{ideal:1920,min:1280},
+      height:{ideal:1080,min:720},
+      focusMode:'continuous',
+      exposureMode:'continuous'
+    };
+  }
   return cfg;
 }
 
