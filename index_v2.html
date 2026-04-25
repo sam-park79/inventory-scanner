@@ -1672,28 +1672,25 @@ function _buildScanner(){
 }
 
 function _scanConfig(useCamId){
-  /* iOS는 ZXing fallback이라 fps 너무 높이면 메인 스레드 부담 ↑ → 인식률 ↓ */
   var cfg={
-    fps:10,
+    fps:8, /* ZXing이 처리할 시간 충분히 */
     qrbox:undefined,
     aspectRatio:1.7777,
     disableFlip:true
   };
-  /* 카메라 해상도 강제 */
   if(useCamId){
-    /* deviceId 사용 시: facingMode 빼야 함 (충돌 방지) */
+    /* 1280x720 = ZXing 최적 (1920은 너무 무거워서 못 따라옴) */
     cfg.videoConstraints={
-      width:{ideal:1920,min:1280},
-      height:{ideal:1080,min:720},
+      width:{ideal:1280,min:1280},
+      height:{ideal:720,min:720},
       focusMode:'continuous',
       exposureMode:'continuous'
     };
   }else{
-    /* facingMode 사용 시: 후면 카메라 강제 */
     cfg.videoConstraints={
-      facingMode:{exact:'environment'}, /* exact = 후면 없으면 fail (전면 fallback 차단) */
-      width:{ideal:1920,min:1280},
-      height:{ideal:1080,min:720},
+      facingMode:{exact:'environment'},
+      width:{ideal:1280,min:1280},
+      height:{ideal:720,min:720},
       focusMode:'continuous',
       exposureMode:'continuous'
     };
@@ -1718,14 +1715,25 @@ function _startWithCamera(idx){
 
 function _startWithFacingMode(){
   html5Scanner=_buildScanner();
-  html5Scanner.start({facingMode:'environment'},_scanConfig(false),onCodeDecoded,onCodeDecodeFail)
+  /* 1차: exact environment (전면 fallback 차단) */
+  html5Scanner.start({facingMode:{exact:'environment'}},_scanConfig(false),onCodeDecoded,onCodeDecodeFail)
     .then(function(){
       scCamInfoEl.textContent='후면 카메라';
       _captureActiveTrack();
     })
     .catch(function(err){
-      console.error('camera start fail:',err);
-      scCamInfoEl.textContent='카메라 권한 확인';
+      console.warn('exact environment failed, trying loose:',err);
+      /* 2차 fallback: loose environment */
+      html5Scanner=_buildScanner();
+      html5Scanner.start({facingMode:'environment'},_scanConfig(false),onCodeDecoded,onCodeDecodeFail)
+        .then(function(){
+          scCamInfoEl.textContent='후면 카메라';
+          _captureActiveTrack();
+        })
+        .catch(function(err2){
+          console.error('camera start fail:',err2);
+          scCamInfoEl.textContent='카메라 권한 확인';
+        });
     });
 }
 
@@ -1735,12 +1743,21 @@ function _captureActiveTrack(){
       var v=document.querySelector('#html5Reader video');
       if(v&&v.srcObject){
         activeTrack=v.srcObject.getVideoTracks()[0];
-        /* 디버그: 실제 해상도 콘솔 출력 */
         var s=activeTrack.getSettings?activeTrack.getSettings():{};
         console.log('[scanner] resolution:',s.width+'x'+s.height,'frameRate:',s.frameRate);
+        /* 자동 줌: 후면 카메라가 zoom 지원하면 1.5x~2x로 (바코드를 크게 잡기 위함) */
+        var caps=activeTrack.getCapabilities?activeTrack.getCapabilities():{};
+        if(caps.zoom){
+          var z=caps.zoom;
+          /* zoom 범위가 보통 1~10. 1.7배가 적정 (너무 가까이면 초점 안 맞음) */
+          var targetZoom=Math.min(Math.max(z.min||1,1.7),z.max||3);
+          activeTrack.applyConstraints({advanced:[{zoom:targetZoom}]})
+            .then(function(){console.log('[scanner] zoom applied:',targetZoom)})
+            .catch(function(){});
+        }
       }
     }catch(e){}
-  },500);
+  },800);
 }
 
 function stopScanner(){
