@@ -696,13 +696,13 @@ function hasVariants(d,type){
   for(var i=0;i<indices.length;i++){
     var r=inventory[indices[i]];
     if(r.c===d.itemCode)continue;
+    /* 재고가 있는 경우만 (l 배열이 있고 비어있지 않음) */
+    if(!r.l||r.l.length===0)continue;
     if(type==='color'){
-      /* 같은 사이즈 + 다른 컬러 */
       if((r.s||'')!==(d.size||''))continue;
       if((r.r||'')!==(d.color||''))return true;
     }
     if(type==='size'){
-      /* 같은 컬러 + 다른 사이즈 */
       if((r.r||'')!==(d.color||''))continue;
       if((r.s||'')!==(d.size||''))return true;
     }
@@ -732,6 +732,8 @@ function toggleVariants(idx,type){
   for(var ri=0;ri<indices.length;ri++){
     var rec=inventory[indices[ri]];
     if(rec.c===d.itemCode)continue;
+    /* 재고가 있는 경우만 */
+    if(!rec.l||rec.l.length===0)continue;
     if(type==='color'){
       /* 같은 사이즈 + 다른 컬러만 */
       if((rec.s||'')!==(d.size||''))continue;
