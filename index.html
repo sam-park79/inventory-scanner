@@ -1172,27 +1172,32 @@ function unlockAudio(){
   if(audioUnlocked)return;
   audioUnlocked=true;
   if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(function(){});
-  /* iOS만 HTML5 Audio unlock 필요 */
-  if(isIOS&&beepAudio){
-    try{
-      var origVol=beepAudio.volume;
-      beepAudio.volume=0;
-      var p=beepAudio.play();
-      if(p&&p.then){
-        p.then(function(){
-          beepAudio.pause();
-          beepAudio.currentTime=0;
-          beepAudio.volume=origVol;
-        }).catch(function(){beepAudio.volume=origVol});
-      }
-    }catch(e){}
+  /* iOS: 풀 전체 unlock (각 인스턴스 무음 재생) */
+  if(isIOS&&beepPool.length>0){
+    for(var i=0;i<beepPool.length;i++){
+      (function(a){
+        try{
+          var origVol=a.volume;
+          a.volume=0;
+          var p=a.play();
+          if(p&&p.then){
+            p.then(function(){
+              a.pause();a.currentTime=0;a.volume=origVol;
+            }).catch(function(){a.volume=origVol});
+          }
+        }catch(e){}
+      })(beepPool[i]);
+    }
   }
 }
 document.addEventListener('touchstart',unlockAudio,{passive:true,once:true});
 document.addEventListener('click',unlockAudio,{passive:true,once:true});
 
-/* iOS fallback: HTML5 Audio (링거 스위치 OFF에서도 미디어 볼륨으로 재생) */
+/* iOS 비프음 풀: 연속 재생을 위해 여러 인스턴스 미리 준비 */
 var beepAudio=null;
+var beepPool=[];
+var beepPoolIdx=0;
+var BEEP_POOL_SIZE=5;
 try{
   /* 800Hz 단음 0.2초 WAV 생성 */
   var sampleRate=44100,duration=0.2,freq=800;
@@ -1211,24 +1216,33 @@ try{
     dv.setInt16(pos,v,true);pos+=2;
   }
   var blob=new Blob([buf],{type:'audio/wav'});
-  beepAudio=new Audio(URL.createObjectURL(blob));
+  var blobUrl=URL.createObjectURL(blob);
+  beepAudio=new Audio(blobUrl);
   beepAudio.volume=1.0;
   beepAudio.preload='auto';
+  /* 풀 생성 */
+  for(var i=0;i<BEEP_POOL_SIZE;i++){
+    var a=new Audio(blobUrl);
+    a.volume=1.0;
+    a.preload='auto';
+    beepPool.push(a);
+  }
 }catch(e){}
 
 function playBeep(){
-  /* iOS: HTML5 Audio - cloneNode로 race condition 방지 */
+  /* iOS: HTML5 Audio Pool 사용 (연속 재생 안정화) */
   if(isIOS){
-    if(beepAudio){
+    if(beepPool.length>0){
       try{
-        var clone=beepAudio.cloneNode(true);
-        clone.volume=1.0;
-        clone.play().catch(function(){});
+        var audio=beepPool[beepPoolIdx];
+        beepPoolIdx=(beepPoolIdx+1)%beepPool.length;
+        audio.currentTime=0;
+        audio.play().catch(function(){});
       }catch(e){}
     }
     return;
   }
-  /* Android: AudioContext만 사용 (소리 모드일 때만 들림) */
+  /* Android: AudioContext만 사용 */
   if(!audioCtx)return;
   try{var t=audioCtx.currentTime;
     var o1=audioCtx.createOscillator(),g1=audioCtx.createGain();
