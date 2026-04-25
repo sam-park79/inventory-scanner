@@ -1269,6 +1269,7 @@ var scanMode='search'; /* 'search' | 'move' */
 var moveScannedItems={}; /* {code: qty} */
 var moveScannedTotal=0;
 var lastConfirmedCode=''; /* 이동모드: 마지막 확정 코드 (같은 바코드 연속 방지) */
+var lastConfirmedTime=0; /* 마지막 확정 시각 (cooldown 관리) */
 var emptyFrames=0; /* 바코드 미감지 연속 프레임 수 */
 var EMPTY_THRESHOLD=15; /* 이 횟수 이상 빈 프레임이어야 해제 (~1.5초) */
 
@@ -1439,7 +1440,14 @@ function onCodeRead(code){
   }
   /* 13자리 숫자 형식 검증 (오인식 방지) */
   if(!/^\d{13}$/.test(code))return;
-  if(scanMode==='move'&&code===lastConfirmedCode)return;
+  if(scanMode==='move'){
+    /* 같은 코드는 5초 cooldown */
+    if(code===lastConfirmedCode){
+      var now=Date.now();
+      if(now-lastConfirmedTime<5000)return;
+      lastConfirmedCode=''; /* cooldown 지나면 해제 */
+    }
+  }
   if(code!==lastConfirmedCode)lastConfirmedCode='';
   if(code===lastCode)matchCount++;else{lastCode=code;matchCount=1}
   scReadEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
@@ -1460,8 +1468,9 @@ function onScanConfirmed(code){
     moveScannedTotal++;
     document.getElementById('scCnt').textContent='스캔: '+moveScannedTotal+'건 ('+Object.keys(moveScannedItems).length+'종)';
     document.getElementById('scLast').textContent='마지막: '+code;
-    /* 스캔 리셋 — 다른 바코드 스캔 가능, 같은 바코드는 카메라 이동 후 재스캔 가능 */
+    /* 스캔 리셋 — 다른 바코드 스캔 가능, 같은 바코드는 5초 cooldown 후 재스캔 가능 */
     lastConfirmedCode=code;
+    lastConfirmedTime=Date.now();
     scanned=false;matchCount=0;scReadEl.textContent='';
     return;
   }
