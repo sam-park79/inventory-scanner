@@ -1172,18 +1172,18 @@ function unlockAudio(){
   if(audioUnlocked)return;
   audioUnlocked=true;
   if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(function(){});
-  /* iOS: 풀 전체 unlock (각 인스턴스 무음 재생) */
+  /* iOS: 풀 전체 unlock — muted 속성으로 무음 보장 후 재생 */
   if(isIOS&&beepPool.length>0){
     for(var i=0;i<beepPool.length;i++){
       (function(a){
         try{
-          var origVol=a.volume;
+          a.muted=true;
           a.volume=0;
           var p=a.play();
           if(p&&p.then){
             p.then(function(){
-              a.pause();a.currentTime=0;a.volume=origVol;
-            }).catch(function(){a.volume=origVol});
+              a.pause();a.currentTime=0;a.muted=false;a.volume=1.0;
+            }).catch(function(){a.muted=false;a.volume=1.0});
           }
         }catch(e){}
       })(beepPool[i]);
@@ -1541,7 +1541,7 @@ function initIOSScanner(){
   Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
     constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
     decoder:{readers:['code_128_reader','ean_reader']},
-    locate:true,frequency:10
+    locate:true,frequency:15,numOfWorkers:0
   },function(err){if(err){scCamInfoEl.textContent='카메라 실패';return}
     Quagga.start();scCamInfoEl.textContent='iOS — QuaggaJS + QR';
     try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
@@ -1558,7 +1558,7 @@ function restartQuagga(idx){try{Quagga.stop()}catch(e){}stopIOSQrScan();var cam=
   var cs=cam?{deviceId:{exact:cam.deviceId}}:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
   setTimeout(function(){Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),constraints:cs},
     decoder:{readers:['code_128_reader','ean_reader']},
-    locate:true,frequency:10},function(err){if(err)return;Quagga.start();activeTrack=null;
+    locate:true,frequency:15,numOfWorkers:0},function(err){if(err)return;Quagga.start();activeTrack=null;
     try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
       scCamInfoEl.textContent=activeTrack.label||'카메라 '+(idx+1)}}catch(e){}
     startIOSQrScan();
