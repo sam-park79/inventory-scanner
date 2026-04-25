@@ -1638,51 +1638,18 @@ function startScanner(){
   startWatchdog();
 
   var savedId='';try{savedId=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
+  /* deviceId 기반 카메라 선택 폐기 → 저장된 ID 정리 */
+  try{localStorage.removeItem('SCAN_CAM_ID')}catch(e){}
 
+  /* facingMode: {exact: environment}로 후면 강제. deviceId는 라벨 신뢰 불가로 미사용 */
   Html5Qrcode.getCameras().then(function(cams){
-    console.log('[scanner] cameras:',cams.map(function(c){return c.label}).join(' | '));
-    /* 후면 카메라만 필터링 (전면 키워드 차단) */
-    var backCams=cams.filter(function(c){
-      var l=(c.label||'').toLowerCase();
-      return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0
-        &&l.indexOf('user')<0&&l.indexOf('face')<0;
-    });
-    /* 후면 키워드 우선 (back/rear/환경/후면) */
-    var prioritized=cams.filter(function(c){
-      var l=(c.label||'').toLowerCase();
-      return l.indexOf('back')>=0||l.indexOf('rear')>=0||l.indexOf('environment')>=0||l.indexOf('후면')>=0;
-    });
-    if(prioritized.length>0)html5Cameras=prioritized;
-    else if(backCams.length>0)html5Cameras=backCams;
-    else html5Cameras=cams;
+    console.log('[scanner] cameras:',cams.map(function(c){return c.label||'(no label)'}).join(' | '));
+    allCameras=cams.map(function(c){return{deviceId:c.id,label:c.label}});
+    html5Cameras=cams;
+  }).catch(function(e){console.warn('getCameras failed:',e)});
 
-    /* 외부 호환 */
-    allCameras=html5Cameras.map(function(c){return{deviceId:c.id,label:c.label}});
-
-    /* savedId 검증: 필터링된 목록에 있어야만 사용 */
-    var matchedSaved=false;
-    if(savedId){
-      for(var i=0;i<html5Cameras.length;i++){
-        if(html5Cameras[i].id===savedId){currentCamIndex=i;matchedSaved=true;break}
-      }
-    }
-    /* savedId가 전면이면 무시하고 첫번째 후면 사용 */
-    if(!matchedSaved){
-      currentCamIndex=0;
-      try{localStorage.removeItem('SCAN_CAM_ID')}catch(e){}
-    }
-    if(currentCamIndex>=html5Cameras.length)currentCamIndex=0;
-
-    if(html5Cameras.length>0){
-      document.getElementById('btnSwitch').textContent='🔄 카메라 전환 ('+html5Cameras.length+'대)';
-      _startWithCamera(currentCamIndex);
-    }else{
-      _startWithFacingMode();
-    }
-  }).catch(function(e){
-    console.warn('getCameras failed:',e);
-    _startWithFacingMode();
-  });
+  /* 항상 facingMode로 시작 (Android 카메라 라벨이 일관되지 않아 deviceId 신뢰 어려움) */
+  _startWithFacingMode();
 }
 
 function _buildScanner(){
@@ -1695,7 +1662,7 @@ function _buildScanner(){
 
 function _scanConfig(useCamId){
   var cfg={
-    fps:20, /* Android BarcodeDetector는 빠르게 처리 가능 */
+    fps:8,
     qrbox:undefined,
     aspectRatio:1.7777,
     disableFlip:true
@@ -1726,7 +1693,6 @@ function _startWithCamera(idx){
   html5Scanner.start(cam.id,_scanConfig(true),onCodeDecoded,onCodeDecodeFail)
     .then(function(){
       scCamInfoEl.textContent=cam.label||'카메라 '+(idx+1);
-      try{localStorage.setItem('SCAN_CAM_ID',cam.id)}catch(e){}
       _captureActiveTrack();
     })
     .catch(function(err){
@@ -1922,7 +1888,7 @@ function initIOSScanner(){
   Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
     constraints:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}}},
     decoder:{readers:getActiveReaders()},
-    locate:true,frequency:8,numOfWorkers:0
+    locate:true,frequency:10,numOfWorkers:0
   },function(err){
     if(err){
       console.warn('exact environment failed, retrying loose:',err);
@@ -1930,7 +1896,7 @@ function initIOSScanner(){
       Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
         constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
         decoder:{readers:getActiveReaders()},
-        locate:true,frequency:8,numOfWorkers:0
+        locate:true,frequency:10,numOfWorkers:0
       },function(err2){
         if(err2){console.error('Quagga init fail:',err2);return}
         Quagga.start();
@@ -1970,13 +1936,13 @@ function restartQuagga(){
     Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
       constraints:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}}},
       decoder:{readers:getActiveReaders()},
-      locate:true,frequency:8,numOfWorkers:0},function(err){
+      locate:true,frequency:10,numOfWorkers:0},function(err){
         if(err){
           /* fallback: loose */
           Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
             constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
             decoder:{readers:getActiveReaders()},
-            locate:true,frequency:8,numOfWorkers:0},function(err2){
+            locate:true,frequency:10,numOfWorkers:0},function(err2){
               if(err2){startIOSQrScan();return}
               Quagga.start();activeTrack=null;
               try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
