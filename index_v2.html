@@ -1661,8 +1661,38 @@ function startScanner(){
   /* localStorage SCAN_CAM_ID 정리 (deviceId 기반 카메라 선택 폐기) */
   try{localStorage.removeItem('SCAN_CAM_ID')}catch(e){}
 
-  /* facingMode로만 시작 (getCameras 호출 제거 - 카메라 권한 충돌 방지) */
-  _startWithFacingMode();
+  /* 카메라 목록에서 메인 후면 카메라 선택 (광각/망원 제외) */
+  Html5Qrcode.getCameras().then(function(cams){
+    console.log('[scanner] cameras:',cams.map(function(c){return c.label||'(no label)'}).join(' | '));
+    /* 후면 카메라 중 wide/ultra/tele 키워드 없는 것 = 메인 카메라 */
+    var mainBack=null;
+    var anyBack=null;
+    for(var i=0;i<cams.length;i++){
+      var l=(cams[i].label||'').toLowerCase();
+      var isBack=l.indexOf('back')>=0||l.indexOf('rear')>=0||l.indexOf('environment')>=0||l.indexOf('후면')>=0;
+      var isAlt=l.indexOf('wide')>=0||l.indexOf('ultra')>=0||l.indexOf('tele')>=0||l.indexOf('depth')>=0||l.indexOf('macro')>=0;
+      if(isBack&&!anyBack)anyBack=cams[i];
+      if(isBack&&!isAlt&&!mainBack)mainBack=cams[i];
+    }
+    /* 라벨이 비어있는 경우 (Android Chrome 권한 처음): camera2 0 = 보통 메인 */
+    if(!mainBack&&!anyBack&&cams.length>0){
+      /* camera2 0 또는 첫번째 카메라가 보통 메인 후면 */
+      for(var j=0;j<cams.length;j++){
+        if((cams[j].label||'').indexOf('0')>=0){mainBack=cams[j];break}
+      }
+      if(!mainBack)mainBack=cams[0];
+    }
+    var chosen=mainBack||anyBack;
+    if(chosen){
+      console.log('[scanner] selected:',chosen.label||chosen.id);
+      _startWithCameraId(chosen.id);
+    }else{
+      _startWithFacingMode();
+    }
+  }).catch(function(e){
+    console.warn('getCameras failed:',e);
+    _startWithFacingMode();
+  });
 }
 
 function _buildScanner(){
@@ -1685,6 +1715,22 @@ function _scanConfig(useCamId){
     cfg.videoConstraints={facingMode:'environment'};
   }
   return cfg;
+}
+
+function _startWithCameraId(camId){
+  html5Scanner=_buildScanner();
+  html5Scanner.start(camId,_scanConfig(true),onCodeDecoded,onCodeDecodeFail)
+    .then(function(){
+      scCamInfoEl.textContent='후면 카메라';
+      _captureActiveTrack();
+    })
+    .catch(function(err){
+      console.warn('camId start failed, falling back to facingMode:',err);
+      var oldScanner=html5Scanner;
+      html5Scanner=null;
+      try{oldScanner.stop().catch(function(){})}catch(e){}
+      setTimeout(_startWithFacingMode,200);
+    });
 }
 
 function _startWithCamera(idx){
