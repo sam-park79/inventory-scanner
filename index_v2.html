@@ -1532,15 +1532,36 @@ function onCodeRead(code){
     /* 위치 모드 + 토글 OFF: QR만 허용 (1D 바코드는 차단) */
     if(!allFormatsMode&&!lastDecodedIsQR)return;
     if(scanned)return;
-    scanned=true;
-    confirmFeedback();
-    document.getElementById('locInput').value=code;
-    closeScanner();
-    if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back();}
-    setTimeout(function(){
-      scanMode='search';
-      document.getElementById('locModal').classList.add('show');
-    },100);
+
+    /* QR은 즉시 확정 (2D는 디코더 정확도 높음) */
+    if(lastDecodedIsQR){
+      scanned=true;
+      confirmFeedback();
+      document.getElementById('locInput').value=code;
+      closeScanner();
+      if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back();}
+      setTimeout(function(){
+        scanMode='search';
+        document.getElementById('locModal').classList.add('show');
+      },100);
+      return;
+    }
+
+    /* 1D 바코드는 CONFIRM_COUNT 누적 (오인식 방지) */
+    if(!isValidCode(code))return;
+    if(code===lastCode)matchCount++;else{lastCode=code;matchCount=1}
+    scReadEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
+    if(matchCount>=CONFIRM_COUNT){
+      scanned=true;
+      confirmFeedback();
+      document.getElementById('locInput').value=code;
+      closeScanner();
+      if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back();}
+      setTimeout(function(){
+        scanMode='search';
+        document.getElementById('locModal').classList.add('show');
+      },100);
+    }
     return;
   }
   /* 형식 검증 (오인식 방지, 모든 형식 모드에선 완화) */
@@ -1659,22 +1680,9 @@ function _scanConfig(useCamId){
     aspectRatio:1.7777,
     disableFlip:true
   };
-  if(useCamId){
-    /* 1280x720 = ZXing 최적 (1920은 너무 무거워서 못 따라옴) */
-    cfg.videoConstraints={
-      width:{ideal:1280,min:1280},
-      height:{ideal:720,min:720},
-      focusMode:'continuous',
-      exposureMode:'continuous'
-    };
-  }else{
-    cfg.videoConstraints={
-      facingMode:{exact:'environment'},
-      width:{ideal:1280,min:1280},
-      height:{ideal:720,min:720},
-      focusMode:'continuous',
-      exposureMode:'continuous'
-    };
+  if(!useCamId){
+    /* facingMode만 지정, 해상도/포커스는 브라우저 기본값 사용 */
+    cfg.videoConstraints={facingMode:'environment'};
   }
   return cfg;
 }
@@ -1715,19 +1723,9 @@ function _captureActiveTrack(){
         activeTrack=v.srcObject.getVideoTracks()[0];
         var s=activeTrack.getSettings?activeTrack.getSettings():{};
         console.log('[scanner] resolution:',s.width+'x'+s.height,'frameRate:',s.frameRate);
-        /* 자동 줌: 후면 카메라가 zoom 지원하면 1.5x~2x로 (바코드를 크게 잡기 위함) */
-        var caps=activeTrack.getCapabilities?activeTrack.getCapabilities():{};
-        if(caps.zoom){
-          var z=caps.zoom;
-          /* zoom 범위가 보통 1~10. 1.7배가 적정 (너무 가까이면 초점 안 맞음) */
-          var targetZoom=Math.min(Math.max(z.min||1,1.7),z.max||3);
-          activeTrack.applyConstraints({advanced:[{zoom:targetZoom}]})
-            .then(function(){console.log('[scanner] zoom applied:',targetZoom)})
-            .catch(function(){});
-        }
       }
     }catch(e){}
-  },800);
+  },500);
 }
 
 function stopScanner(){
