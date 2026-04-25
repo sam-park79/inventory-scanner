@@ -1425,19 +1425,20 @@ function toggleTorch(){
 function onCodeRead(code){
   if(scanned&&scanMode==='search')return;
   if(scanMode==='location'){
-    /* 중복 호출 방지 */
+    /* 위치 모드는 QR이라 검증 스킵 */
     if(scanned)return;
     scanned=true;
     document.getElementById('locInput').value=code;
     closeScanner();
-    /* history 정리: 스캐너 push만 제거 (locModal push는 유지) */
     if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back();}
     setTimeout(function(){
-      scanMode='search'; /* 모드 리셋 (locModal 오픈 이후) */
+      scanMode='search';
       document.getElementById('locModal').classList.add('show');
     },100);
     return;
   }
+  /* 13자리 숫자 형식 검증 (오인식 방지) */
+  if(!/^\d{13}$/.test(code))return;
   if(scanMode==='move'&&code===lastConfirmedCode)return;
   if(code!==lastConfirmedCode)lastConfirmedCode='';
   if(code===lastCode)matchCount++;else{lastCode=code;matchCount=1}
@@ -1539,7 +1540,7 @@ function initIOSScanner(){
   document.getElementById('androidCam').style.display='none';document.getElementById('iosScanner').style.display='block';
   Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
     constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
-    decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','i2of5_reader','codabar_reader']},
+    decoder:{readers:['code_128_reader']},
     locate:true,frequency:10
   },function(err){if(err){scCamInfoEl.textContent='카메라 실패';return}
     Quagga.start();scCamInfoEl.textContent='iOS — QuaggaJS + QR';
@@ -1556,7 +1557,7 @@ function initIOSScanner(){
 function restartQuagga(idx){try{Quagga.stop()}catch(e){}stopIOSQrScan();var cam=allCameras[idx];
   var cs=cam?{deviceId:{exact:cam.deviceId}}:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
   setTimeout(function(){Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),constraints:cs},
-    decoder:{readers:['ean_reader','ean_8_reader','code_128_reader','code_39_reader','upc_reader','upc_e_reader','i2of5_reader','codabar_reader']},
+    decoder:{readers:['code_128_reader']},
     locate:true,frequency:10},function(err){if(err)return;Quagga.start();activeTrack=null;
     try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
       scCamInfoEl.textContent=activeTrack.label||'카메라 '+(idx+1)}}catch(e){}
