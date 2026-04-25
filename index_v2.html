@@ -1287,6 +1287,10 @@ function playBeep(){
 
 function confirmFeedback(){
   if(window.navigator&&typeof window.navigator.vibrate==='function'){try{window.navigator.vibrate(400)}catch(e){}}
+  /* iOS: audioCtx가 suspended 상태로 들어갈 수 있음 → 매번 재개 시도 */
+  if(audioCtx&&audioCtx.state==='suspended'){
+    audioCtx.resume().catch(function(){});
+  }
   playBeep();
 }
 
@@ -1529,10 +1533,10 @@ function onCodeRead(code){
   /* 형식 검증 (오인식 방지, 모든 형식 모드에선 완화) */
   if(!isValidCode(code))return;
   if(scanMode==='move'){
-    /* 같은 코드는 3초 cooldown */
+    /* 같은 코드는 1.5초 cooldown */
     if(code===lastConfirmedCode){
       var now=Date.now();
-      if(now-lastConfirmedTime<3000)return;
+      if(now-lastConfirmedTime<1500)return;
       lastConfirmedCode=''; /* cooldown 지나면 해제 */
     }
   }
@@ -1577,21 +1581,21 @@ var html5Cameras=[]; /* {id,label} 형식 */
 
 function startWatchdog(){
   stopWatchdog();
-  /* 700ms 동안 디코드 콜백이 없으면 누적 카운터 리셋 (다른 코드 인식 방해 방지) */
+  /* 500ms 동안 디코드 콜백이 없으면 누적 카운터 리셋 (다른 코드 인식 방해 방지) */
   watchdogTimer=setInterval(function(){
     if(scanned&&scanMode==='search')return;
     var idle=Date.now()-lastDecodeTime;
-    if(idle>700){
+    if(idle>500){
       if(matchCount>0||lastCode){
         matchCount=0;lastCode='';
         scReadEl.textContent='';
       }
-      /* 이동모드: 1.5초 idle 시 cooldown 해제 (같은 바코드 재스캔 가능) */
-      if(scanMode==='move'&&idle>1500&&lastConfirmedCode){
-        lastConfirmedCode='';
-      }
     }
-  },300);
+    /* 이동모드: cooldown 체크는 idle과 무관하게 */
+    if(scanMode==='move'&&lastConfirmedCode&&Date.now()-lastConfirmedTime>1500){
+      lastConfirmedCode='';
+    }
+  },200);
 }
 
 function stopWatchdog(){
@@ -1653,10 +1657,11 @@ function _buildScanner(){
 function _scanConfig(useCamId){
   /* qrbox는 가이드 박스와 일치하도록 */
   var cfg={
-    fps:10,
+    fps:15,
     qrbox:function(vw,vh){
-      var w=Math.min(vw*0.9,440);
-      var h=w/1.8;
+      /* 화면 95% 너비, 1.5:1 비율 (스캔 영역 넓힘) */
+      var w=Math.min(vw*0.95,500);
+      var h=w/1.5;
       return {width:Math.floor(w),height:Math.floor(h)};
     },
     aspectRatio:1.7777,
@@ -1818,8 +1823,8 @@ function updateSummary(){
   }
   /* 전체체크 박스 동기화: 모두 체크면 ON, 일부만 체크면 indeterminate, 모두 해제면 OFF */
   var master=document.getElementById('rvMasterCb');
-  if(master&&total>0){
-    if(checkedKind===0){master.checked=false;master.indeterminate=false}
+  if(master){
+    if(total===0||checkedKind===0){master.checked=false;master.indeterminate=false}
     else if(checkedKind===total){master.checked=true;master.indeterminate=false}
     else{master.checked=false;master.indeterminate=true}
   }
@@ -1864,6 +1869,7 @@ function addManualItem(){
 function closeReview(){document.getElementById('reviewOverlay').classList.remove('show')}
 
 function toggleAllCb(master){
+  master.indeterminate=false;
   var cbs=document.querySelectorAll('.rv-cb');
   for(var i=0;i<cbs.length;i++)cbs[i].checked=master.checked;
 }
@@ -1950,7 +1956,7 @@ function doConsign(){
 
     document.getElementById('reviewOverlay').classList.remove('show');
     document.getElementById('scannerOverlay').classList.remove('show');
-    document.getElementById('resultOverlay').classList.add('show');unlockAudio();confirmFeedback();
+    document.getElementById('resultOverlay').classList.add('show');unlockAudio();setTimeout(confirmFeedback,80);
   })
   .catch(function(err){
     document.getElementById('procOverlay').classList.remove('show');
@@ -2097,7 +2103,7 @@ executeMove=function(){
 
     document.getElementById('reviewOverlay').classList.remove('show');
     document.getElementById('scannerOverlay').classList.remove('show');
-    document.getElementById('resultOverlay').classList.add('show');unlockAudio();confirmFeedback();
+    document.getElementById('resultOverlay').classList.add('show');unlockAudio();setTimeout(confirmFeedback,80);
   })
   .catch(function(err){
     document.getElementById('procOverlay').classList.remove('show');
