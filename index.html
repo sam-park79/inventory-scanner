@@ -606,6 +606,7 @@ function loadData(forceRefresh){
     var t=new Date();dataStatusEl.textContent='✓ '+res.count+'건 ('+t.getHours()+':'+String(t.getMinutes()).replace(/^(\d)$/,'0$1')+')';
     if(res.timings)console.log('[LOAD TIMING]',JSON.stringify(res.timings));
     dataStatusEl.className='data-status';
+    confirmFeedback();
   }).catch(function(){dataLoading=false;dataStatusEl.textContent='서버 연결 실패';dataStatusEl.className='data-status er'});
 }
 loadData();
