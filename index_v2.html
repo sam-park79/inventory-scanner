@@ -1312,16 +1312,16 @@ var allFormatsMode=false; /* 모든 바코드 형식 인식 모드 */
 function getActiveFormats(){
   if(typeof Html5QrcodeSupportedFormats==='undefined')return undefined;
   var F=Html5QrcodeSupportedFormats;
-  /* 위치 모드: QR 우선 (전체 모드면 바코드도) */
+  /* 위치 모드: QR만 (전체 모드면 바코드도) */
   if(scanMode==='location'){
     return allFormatsMode
-      ? [F.QR_CODE,F.CODE_128,F.CODE_39,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.ITF,F.CODABAR,F.CODE_93]
-      : [F.QR_CODE,F.CODE_128,F.EAN_13];
+      ? [F.QR_CODE,F.CODE_128,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_39,F.ITF,F.CODABAR]
+      : [F.QR_CODE]; /* 위치 기본은 QR 단일 → 인식 속도 최대화 */
   }
   /* 검색/이동: 바코드 + QR */
   return allFormatsMode
-    ? [F.CODE_128,F.CODE_39,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.ITF,F.CODABAR,F.CODE_93,F.QR_CODE]
-    : [F.CODE_128,F.EAN_13,F.QR_CODE];
+    ? [F.CODE_128,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_39,F.ITF,F.CODABAR,F.QR_CODE]
+    : [F.CODE_128,F.EAN_13,F.QR_CODE]; /* 기본 3종만 → 빠름 */
 }
 
 function isValidCode(code){
@@ -1655,22 +1655,23 @@ function _buildScanner(){
 }
 
 function _scanConfig(useCamId){
-  /* qrbox는 가이드 박스와 일치하도록 */
+  /* iOS는 ZXing fallback이라 fps 너무 높이면 메인 스레드 부담 ↑ → 인식률 ↓ */
   var cfg={
-    fps:15,
-    qrbox:function(vw,vh){
-      /* 화면 95% 너비, 1.5:1 비율 (스캔 영역 넓힘) */
-      var w=Math.min(vw*0.95,500);
-      var h=w/1.5;
-      return {width:Math.floor(w),height:Math.floor(h)};
-    },
+    fps:10, /* iOS ZXing 최적값 */
+    qrbox:undefined, /* qrbox 미설정 = 전체 비디오 영역 스캔 (ZXing은 어차피 전체 스캔) */
     aspectRatio:1.7777,
-    disableFlip:false
+    disableFlip:true /* 좌우반전 시도 비활성 → 디코드 시간 절반 */
   };
-  if(!useCamId){
-    /* facingMode 모드: videoConstraints에 추가 해상도 힌트 */
-    cfg.videoConstraints={facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
-  }
+  /* 카메라 해상도 강제: 낮은 해상도면 ZXing이 못 읽음 */
+  cfg.videoConstraints={
+    facingMode:useCamId?undefined:'environment',
+    width:{ideal:1920,min:1280},
+    height:{ideal:1080,min:720},
+    /* iOS Safari: 후면 카메라에서 자동 초점 활성화 */
+    focusMode:'continuous',
+    /* 노출 자동 조정 */
+    exposureMode:'continuous'
+  };
   return cfg;
 }
 
@@ -1708,6 +1709,9 @@ function _captureActiveTrack(){
       var v=document.querySelector('#html5Reader video');
       if(v&&v.srcObject){
         activeTrack=v.srcObject.getVideoTracks()[0];
+        /* 디버그: 실제 해상도 콘솔 출력 */
+        var s=activeTrack.getSettings?activeTrack.getSettings():{};
+        console.log('[scanner] resolution:',s.width+'x'+s.height,'frameRate:',s.frameRate);
       }
     }catch(e){}
   },500);
