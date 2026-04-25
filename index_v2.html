@@ -147,7 +147,8 @@
     .var-card{background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);
       border-radius:10px;padding:10px 12px;margin-bottom:6px}
     .var-card .vc-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
-    .var-card .vc-code{font-size:13px;font-weight:600;color:var(--orange);font-family:monospace;cursor:pointer}
+    .var-card .vc-code{font-size:12px;font-weight:600;color:var(--accent);background:rgba(79,140,255,.12);padding:2px 8px;border-radius:6px;cursor:pointer;-webkit-user-select:none;user-select:none}
+    .var-card .vc-code:active{background:rgba(79,140,255,.3)}
     .var-card .vc-name{font-size:13px;color:var(--text);cursor:pointer;word-break:break-word}
     .var-card .vc-loc{font-size:12px;font-weight:600;color:var(--orange)}
     .var-card .vc-qty{font-size:13px;font-weight:700;color:var(--green);margin-left:auto}
@@ -234,7 +235,7 @@
       padding:8px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));text-align:center}
     .sc-hint{font-size:12px;color:var(--text2)}
     .sc-read{font-size:11px;color:var(--green);margin-top:2px;min-height:15px;font-weight:600}
-    .sc-cam-info{font-size:11px;color:#ffeb3b;margin-top:2px;word-break:break-all;padding:0 8px}
+    .sc-cam-info{display:none}
     .btn-scan-done{margin-top:10px;width:100%;height:52px;border:none;border-radius:14px;
       background:var(--orange);color:#000;font-size:16px;font-weight:700;font-family:var(--font);cursor:pointer;display:none}
     .btn-scan-done.show{display:block}
@@ -458,7 +459,7 @@
   <div class="sc-top">
     <h2 id="scTitle">📷 바코드 스캔</h2>
     <div class="sc-btns">
-      <button class="sc-btn sw" id="btnSwitch" onclick="switchCamera()">🔄 카메라 전환</button>
+      <button class="sc-btn sw" id="btnSwitch" onclick="switchCamera()" style="display:none">🔄 카메라 전환</button>
       <button class="sc-btn" id="btnTorch" onclick="toggleTorch()">🔦</button>
       <button class="sc-btn" onclick="closeScannerBtn()">닫기</button>
     </div>
@@ -847,9 +848,22 @@ function fallbackCopy(text,el){
 }
 
 function showCopyToast(el){
-  var orig=el.textContent;
-  el.textContent='✓ 복사됨';el.style.background='rgba(52,211,153,.25)';
-  setTimeout(function(){el.textContent=orig;el.style.background=''},1000);
+  /* 짧고 일관된 floating tip 표시 (텍스트 교체 방식 X) */
+  var tip=document.getElementById('copyTip');
+  if(!tip){
+    tip=document.createElement('div');
+    tip.id='copyTip';
+    tip.style.cssText='position:fixed;background:rgba(52,211,153,.95);color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;z-index:9999;pointer-events:none;opacity:0;transition:opacity .15s;box-shadow:0 4px 12px rgba(0,0,0,.3)';
+    document.body.appendChild(tip);
+  }
+  tip.textContent='✓ 복사됨';
+  /* 엘리먼트 위에 띄우기 */
+  var r=el.getBoundingClientRect();
+  tip.style.left=(r.left+r.width/2-40)+'px';
+  tip.style.top=(r.top-32)+'px';
+  tip.style.opacity='1';
+  clearTimeout(tip._hideTimer);
+  tip._hideTimer=setTimeout(function(){tip.style.opacity='0'},800);
 }
 
 /* ══════════════════════════════════════
@@ -1287,6 +1301,8 @@ var moveScannedItems={}; /* {code: qty} */
 var moveScannedTotal=0;
 var lastConfirmedCode=''; /* 이동모드: 마지막 확정 코드 (같은 바코드 연속 방지) */
 var lastConfirmedTime=0; /* 마지막 확정 시각 (cooldown 관리) */
+var lastDecodeTime=0; /* 마지막 디코드 콜백 시각 (watchdog용) */
+var watchdogTimer=null;
 var allFormatsMode=false; /* 모든 바코드 형식 인식 모드 */
 
 function getActiveFormats(){
@@ -1306,9 +1322,12 @@ function getActiveFormats(){
 
 function isValidCode(code){
   if(!code)return false;
-  /* 모든 형식 모드: 8자 이상 + 알파벳/숫자만 (오인식 garbage 차단) */
+  /* QR은 디코더가 정확하므로 길이 검증 없음 (형식만 맞으면 통과) */
+  if(lastDecodedIsQR){
+    return true;
+  }
+  /* 1D 바코드: 모든 형식 모드면 8자 이상 + 영숫자, 기본은 13자리 숫자 */
   if(allFormatsMode)return code.length>=8&&/^[A-Za-z0-9_\-]+$/.test(code);
-  /* 기본: 13자리 숫자만 (Code 128/EAN-13 + QR이라도 13자리 숫자면 OK) */
   return /^\d{13}$/.test(code);
 }
 
@@ -1345,8 +1364,10 @@ var emptyFrames=0; /* 바코드 미감지 연속 프레임 수 */
 var EMPTY_THRESHOLD=15; /* 이 횟수 이상 빈 프레임이어야 해제 (~1.5초) */
 
 function openScanner(mode){
+  unlockAudio(); /* 사용자 제스처(클릭)로 진입 → audio 강제 unlock */
   scanMode=mode||'search';
   scanned=false;lastCode='';matchCount=0;torchOn=false;lastConfirmedCode='';emptyFrames=0;
+  lastDecodeTime=Date.now();
   scReadEl.textContent='';scCamInfoEl.textContent='';
   document.getElementById('btnTorch').classList.remove('active');
   document.getElementById('scannerOverlay').classList.add('show');
@@ -1489,6 +1510,7 @@ function toggleTorch(){
 }
 
 function onCodeRead(code){
+  lastDecodeTime=Date.now();
   if(scanned&&scanMode==='search')return;
   if(scanMode==='location'){
     /* 위치 모드는 QR이라 검증 스킵 */
@@ -1553,6 +1575,29 @@ function onScanConfirmed(code){
 var html5Scanner=null;
 var html5Cameras=[]; /* {id,label} 형식 */
 
+function startWatchdog(){
+  stopWatchdog();
+  /* 700ms 동안 디코드 콜백이 없으면 누적 카운터 리셋 (다른 코드 인식 방해 방지) */
+  watchdogTimer=setInterval(function(){
+    if(scanned&&scanMode==='search')return;
+    var idle=Date.now()-lastDecodeTime;
+    if(idle>700){
+      if(matchCount>0||lastCode){
+        matchCount=0;lastCode='';
+        scReadEl.textContent='';
+      }
+      /* 이동모드: 1.5초 idle 시 cooldown 해제 (같은 바코드 재스캔 가능) */
+      if(scanMode==='move'&&idle>1500&&lastConfirmedCode){
+        lastConfirmedCode='';
+      }
+    }
+  },300);
+}
+
+function stopWatchdog(){
+  if(watchdogTimer){clearInterval(watchdogTimer);watchdogTimer=null}
+}
+
 function startScanner(){
   if(typeof Html5Qrcode==='undefined'){
     setTimeout(startScanner,300);return;
@@ -1564,6 +1609,7 @@ function startScanner(){
     try{html5Scanner.stop().catch(function(){})}catch(e){}
     html5Scanner=null;
   }
+  startWatchdog();
 
   var savedId='';try{savedId=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
 
@@ -1663,6 +1709,7 @@ function _captureActiveTrack(){
 }
 
 function stopScanner(){
+  stopWatchdog();
   if(!html5Scanner){activeTrack=null;return}
   var s=html5Scanner;
   html5Scanner=null;
@@ -1678,21 +1725,22 @@ function restartScanner(){
   setTimeout(startScanner,300);
 }
 
+var lastDecodedIsQR=false;
+
 function onCodeDecoded(decodedText,decodedResult){
   if(!decodedText)return;
   var fmt='';
   try{fmt=decodedResult.result.format.formatName||''}catch(e){}
   var isQR=fmt==='QR_CODE';
+  lastDecodedIsQR=isQR;
   /* 위치 모드는 QR이 즉시 확정 */
   if(scanMode==='location'&&isQR){
     onCodeRead(decodedText);
     return;
   }
-  /* 검색/이동 모드: QR도 바코드와 동일하게 CONFIRM_COUNT 누적 */
-  if(isQR){
-    if(decodedText.length<4)return; /* 너무 짧은 QR garbage 차단 */
-  }else{
-    if(decodedText.length<8)return; /* 너무 짧은 1D 결과 차단 */
+  /* QR은 디코더가 정확하므로 길이 검증 없음 */
+  if(!isQR){
+    if(decodedText.length<8)return; /* 1D 바코드만 8자 미만 garbage 차단 */
   }
   onCodeRead(decodedText);
 }
@@ -1717,7 +1765,7 @@ function renderReviewTable(){
     '</div>';
 
   h+='<table class="rv-table"><thead><tr>'+
-    '<th style="width:30px"><input type="checkbox" checked onchange="toggleAllCb(this);updateSummary()"></th>'+
+    '<th style="width:30px"><input type="checkbox" id="rvMasterCb" checked onchange="toggleAllCb(this);updateSummary()"></th>'+
     '<th>품목코드</th><th>품목명</th><th>상품위치</th>'+
     '<th style="width:55px;text-align:center">수량</th></tr></thead><tbody>';
   for(var i=0;i<keys.length;i++){
@@ -1753,6 +1801,7 @@ function updateSummary(){
   var keys=Object.keys(moveScannedItems);
   var checkedQty=0,checkedKind=0;
   var cbs=document.querySelectorAll('.rv-cb');
+  var total=cbs.length;
   for(var c=0;c<cbs.length;c++){
     if(cbs[c].checked){
       var code=cbs[c].getAttribute('data-code');
@@ -1766,6 +1815,13 @@ function updateSummary(){
       '<span class="rv-sum-item"><span class="rv-sum-label">선택 품목</span><span class="rv-sum-val">'+checkedKind+'종</span></span>'+
       '<span class="rv-sum-divider"></span>'+
       '<span class="rv-sum-item"><span class="rv-sum-label">선택 수량</span><span class="rv-sum-val accent">'+checkedQty+'개</span></span>';
+  }
+  /* 전체체크 박스 동기화: 모두 체크면 ON, 일부만 체크면 indeterminate, 모두 해제면 OFF */
+  var master=document.getElementById('rvMasterCb');
+  if(master&&total>0){
+    if(checkedKind===0){master.checked=false;master.indeterminate=false}
+    else if(checkedKind===total){master.checked=true;master.indeterminate=false}
+    else{master.checked=false;master.indeterminate=true}
   }
 }
 
@@ -1894,7 +1950,7 @@ function doConsign(){
 
     document.getElementById('reviewOverlay').classList.remove('show');
     document.getElementById('scannerOverlay').classList.remove('show');
-    document.getElementById('resultOverlay').classList.add('show');confirmFeedback();
+    document.getElementById('resultOverlay').classList.add('show');unlockAudio();confirmFeedback();
   })
   .catch(function(err){
     document.getElementById('procOverlay').classList.remove('show');
@@ -2041,7 +2097,7 @@ executeMove=function(){
 
     document.getElementById('reviewOverlay').classList.remove('show');
     document.getElementById('scannerOverlay').classList.remove('show');
-    document.getElementById('resultOverlay').classList.add('show');confirmFeedback();
+    document.getElementById('resultOverlay').classList.add('show');unlockAudio();confirmFeedback();
   })
   .catch(function(err){
     document.getElementById('procOverlay').classList.remove('show');
