@@ -466,7 +466,7 @@
   <div class="sc-top">
     <h2 id="scTitle">📷 바코드 스캔</h2>
     <div class="sc-btns">
-      <button class="sc-btn sw" id="btnSwitch" onclick="switchCamera()" style="display:none">🔄 카메라 전환</button>
+      <button class="sc-btn sw" id="btnSwitch" onclick="switchCamera()">🔄 카메라 전환</button>
       <button class="sc-btn" id="btnTorch" onclick="toggleTorch()">🔦</button>
       <button class="sc-btn" onclick="closeScannerBtn()">닫기</button>
     </div>
@@ -1512,6 +1512,8 @@ function discoverCameras(){
 function switchCamera(){
   if(allCameras.length<=1){scCamInfoEl.textContent='전환 불가';return}
   currentCamIndex=(currentCamIndex+1)%allCameras.length;
+  /* localStorage 즉시 업데이트 (restartScanner가 savedId 우선 적용하기 때문) */
+  try{localStorage.setItem('SCAN_CAM_ID',allCameras[currentCamIndex].deviceId)}catch(e){}
   lastCode='';matchCount=0;scReadEl.textContent='';torchOn=false;
   document.getElementById('btnTorch').classList.remove('active');
   restartScanner();
@@ -1744,7 +1746,14 @@ function _captureActiveTrack(){
       if(v&&v.srcObject){
         activeTrack=v.srcObject.getVideoTracks()[0];
         var s=activeTrack.getSettings?activeTrack.getSettings():{};
-        console.log('[scanner] resolution:',s.width+'x'+s.height,'frameRate:',s.frameRate);
+        console.log('[scanner] resolution:',s.width+'x'+s.height,'zoom:',s.zoom);
+        /* 광각 카메라(zoom < 1) 감지 시 1.0으로 강제 → 메인 카메라 화각으로 보정 */
+        var caps=activeTrack.getCapabilities?activeTrack.getCapabilities():{};
+        if(caps.zoom&&typeof s.zoom==='number'&&s.zoom<1){
+          activeTrack.applyConstraints({advanced:[{zoom:1.0}]})
+            .then(function(){console.log('[scanner] wide camera detected, forced zoom 1.0')})
+            .catch(function(){});
+        }
       }
     }catch(e){}
   },500);
