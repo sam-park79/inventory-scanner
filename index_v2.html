@@ -10,6 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     :root{--bg:#0f1117;--surface:#1a1d27;--card:#222633;--border:#2e3345;
@@ -222,6 +224,11 @@
     #html5Reader img,#html5Reader [data-testid="qr-code-overlay-shaded-region"]{display:none!important}
     #html5Reader [aria-label="An embedded link to scanapp.org"]{display:none!important}
     #html5Reader > div > div:not([id^="qr-shaded-region"]){display:none!important}
+    /* iOS: QuaggaJS + jsQR 컨테이너 */
+    #iosScanner{flex:1;background:#000;display:none;position:relative;overflow:hidden}
+    #iosScanner video,#iosScanner canvas{width:100%!important;height:100%!important;
+      -o-object-fit:cover;object-fit:cover;position:absolute;top:0;left:0}
+    #iosScanner canvas.drawingBuffer{display:none!important}
     .sc-guide-wrap{position:fixed;inset:0;z-index:410;pointer-events:none;display:flex;align-items:center;justify-content:center}
     .sc-guide{position:relative;width:90%;max-width:440px;aspect-ratio:1.8/1;border:2.5px solid var(--green);
       border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.5)}
@@ -469,6 +476,7 @@
     <div class="last" id="scLast"></div>
   </div>
   <div id="html5Reader"></div>
+  <div id="iosScanner"></div>
   <div class="sc-guide-wrap" id="scanGuide"><div class="sc-guide"><div class="sc-guide-line"></div></div></div>
   <div class="sc-bottom">
     <div class="sc-hint">바코드를 카메라에 비춰주세요</div>
@@ -1347,7 +1355,11 @@ function toggleAllFormats(cb){
   showToast(msg);
   /* 스캐너 재시작 (새 디코더 적용) */
   if(document.getElementById('scannerOverlay').classList.contains('show')){
-    restartScanner();
+    if(isIOS){
+      restartQuagga();
+    }else{
+      restartScanner();
+    }
   }
 }
 
@@ -1603,10 +1615,19 @@ function stopWatchdog(){
 }
 
 function startScanner(){
+  /* iOS 분기: ZXing 인식률 한계로 v1 (QuaggaJS + jsQR) 사용 */
+  if(isIOS){
+    initIOSScanner();
+    startWatchdog();
+    return;
+  }
+  /* Android: html5-qrcode (BarcodeDetector 우선) */
   if(typeof Html5Qrcode==='undefined'){
     setTimeout(startScanner,300);return;
   }
   document.getElementById('scanGuide').style.display='flex';
+  document.getElementById('html5Reader').style.display='block';
+  document.getElementById('iosScanner').style.display='none';
 
   /* 이전 인스턴스 정리 */
   if(html5Scanner){
@@ -1762,6 +1783,14 @@ function _captureActiveTrack(){
 
 function stopScanner(){
   stopWatchdog();
+  /* iOS: QuaggaJS + jsQR 정지 */
+  if(isIOS){
+    try{Quagga.stop()}catch(e){}
+    stopIOSQrScan();
+    activeTrack=null;
+    return;
+  }
+  /* Android: html5-qrcode 정지 */
   if(!html5Scanner){activeTrack=null;return}
   var s=html5Scanner;
   html5Scanner=null;
@@ -1775,6 +1804,100 @@ function stopScanner(){
 function restartScanner(){
   stopScanner();
   setTimeout(startScanner,300);
+}
+
+/* ── iOS: QuaggaJS + jsQR ── */
+var iosQrTimer=null;
+var iosQrCanvas=null;
+
+function startIOSQrScan(){
+  stopIOSQrScan();
+  if(!iosQrCanvas){iosQrCanvas=document.createElement('canvas')}
+  iosQrTimer=setInterval(function(){
+    if(scanned&&scanMode==='search')return;
+    var vid=document.querySelector('#iosScanner video');
+    if(!vid||vid.readyState<2)return;
+    var w=vid.videoWidth,h=vid.videoHeight;
+    if(!w||!h)return;
+    iosQrCanvas.width=w;iosQrCanvas.height=h;
+    var ctx=iosQrCanvas.getContext('2d',{willReadFrequently:true});
+    ctx.drawImage(vid,0,0,w,h);
+    var imgData=ctx.getImageData(0,0,w,h);
+    var qr=jsQR(imgData.data,w,h,{inversionAttempts:'dontInvert'});
+    if(qr&&qr.data){
+      /* QR location 검증 (가짜 QR 차단) */
+      if(!qr.location||!qr.location.topLeftCorner)return;
+      var loc=qr.location;
+      var dx=loc.topRightCorner.x-loc.topLeftCorner.x;
+      var dy=loc.bottomLeftCorner.y-loc.topLeftCorner.y;
+      var qrSize=Math.min(Math.abs(dx),Math.abs(dy));
+      if(qrSize<60)return;
+      lastDecodedIsQR=true;
+      /* 위치 모드면 즉시 확정 */
+      if(scanMode==='location'){
+        onCodeRead(qr.data);
+        return;
+      }
+      /* 검색/이동 모드는 onCodeRead로 (CONFIRM_COUNT 누적) */
+      onCodeRead(qr.data);
+    }
+  },250);
+}
+
+function stopIOSQrScan(){
+  if(iosQrTimer){clearInterval(iosQrTimer);iosQrTimer=null}
+}
+
+function getActiveReaders(){
+  if(allFormatsMode){
+    return ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','upc_reader','upc_e_reader','i2of5_reader','codabar_reader'];
+  }
+  return ['code_128_reader','ean_reader'];
+}
+
+function initIOSScanner(){
+  document.getElementById('html5Reader').style.display='none';
+  document.getElementById('iosScanner').style.display='block';
+  document.getElementById('scanGuide').style.display='flex';
+  Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
+    constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
+    decoder:{readers:getActiveReaders()},
+    locate:true,frequency:10,numOfWorkers:0
+  },function(err){
+    if(err){console.error('Quagga init fail:',err);return}
+    Quagga.start();
+    try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+    startIOSQrScan();
+  });
+  Quagga.onDetected(function(result){
+    var c=result.codeResult&&result.codeResult.code;
+    if(!c)return;
+    if(c.length<8)return;
+    lastDecodedIsQR=false;
+    onCodeRead(c);
+  });
+  /* 빈 프레임 감지: lastConfirmedCode 해제 */
+  var noDetectFrames=0;
+  Quagga.onProcessed(function(result){
+    if(result&&result.codeResult&&result.codeResult.code){noDetectFrames=0}
+    else{noDetectFrames++;if(noDetectFrames>=15&&lastConfirmedCode){lastConfirmedCode='';noDetectFrames=0}}
+  });
+}
+
+function restartQuagga(){
+  try{Quagga.stop()}catch(e){}stopIOSQrScan();
+  setTimeout(function(){
+    Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
+      constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
+      decoder:{readers:getActiveReaders()},
+      locate:true,frequency:10,numOfWorkers:0},function(err){
+        if(err){startIOSQrScan();return}
+        Quagga.start();activeTrack=null;
+        try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+        startIOSQrScan();
+      });
+    setTimeout(function(){if(!iosQrTimer)startIOSQrScan()},1000);
+  },300);
 }
 
 var lastDecodedIsQR=false;
