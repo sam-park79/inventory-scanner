@@ -199,16 +199,18 @@
     /* 스캔 카운터 (이동 모드) */
     .sc-counter{background:rgba(15,17,23,.85);padding:8px 16px;text-align:center;z-index:425;display:none}
     .sc-counter.show{display:block}
-    .sc-toggle-wrap{padding:8px 0 4px;text-align:center}
-    .sc-toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none;-webkit-user-select:none}
+    .sc-toggle-wrap{padding:10px 0 6px;text-align:center}
+    .sc-toggle{display:inline-flex;align-items:center;gap:10px;cursor:pointer;user-select:none;-webkit-user-select:none;
+      padding:8px 14px;background:rgba(255,255,255,.05);border-radius:10px;border:1px solid rgba(255,255,255,.1)}
+    .sc-toggle:active{background:rgba(255,255,255,.1)}
     .sc-toggle input{display:none}
-    .sc-toggle-slider{width:36px;height:20px;background:rgba(255,255,255,.2);border-radius:10px;
-      position:relative;transition:background .2s}
-    .sc-toggle-slider::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;
+    .sc-toggle-slider{width:46px;height:26px;background:rgba(255,255,255,.2);border-radius:13px;
+      position:relative;transition:background .2s;flex-shrink:0}
+    .sc-toggle-slider::after{content:'';position:absolute;top:2px;left:2px;width:22px;height:22px;
       background:#fff;border-radius:50%;transition:transform .2s}
     .sc-toggle input:checked+.sc-toggle-slider{background:var(--accent)}
-    .sc-toggle input:checked+.sc-toggle-slider::after{transform:translateX(16px)}
-    .sc-toggle-label{font-size:11px;color:var(--text2)}
+    .sc-toggle input:checked+.sc-toggle-slider::after{transform:translateX(20px)}
+    .sc-toggle-label{font-size:13px;color:#fff;font-weight:500}
     .sc-counter .cnt{font-size:14px;font-weight:700;color:var(--orange)}
     .sc-counter .last{font-size:11px;color:var(--text2);margin-top:2px}
 
@@ -1175,19 +1177,18 @@ var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
 
 function unlockAudio(){
   if(audioUnlocked)return;
+  audioUnlocked=true;
   if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(function(){});
-  /* iOS: 풀 인스턴스를 순차로 unlock (각각 muted=true 상태로 play→pause) */
-  if(isIOS&&beepPool.length>0){
+  /* iOS: 무음 WAV로 audio context 활성화 (소리 누출 절대 없음) */
+  if(isIOS&&silentAudio){
+    try{silentAudio.play().catch(function(){})}catch(e){}
+  }
+  /* 풀 인스턴스도 load() 호출로 준비 (실제 unlock은 첫 play 시 처리됨) */
+  if(isIOS){
     for(var i=0;i<beepPool.length;i++){
-      var a=beepPool[i];
-      a.muted=true;
-      try{
-        var p=a.play();
-        if(p&&p.then)p.then(function(audio){return function(){audio.pause();audio.currentTime=0;audio.muted=false}}(a)).catch(function(audio){return function(){audio.muted=false}}(a));
-      }catch(e){a.muted=false}
+      try{beepPool[i].load()}catch(e){}
     }
   }
-  audioUnlocked=true;
 }
 document.addEventListener('touchstart',unlockAudio,{passive:true,once:true});
 document.addEventListener('click',unlockAudio,{passive:true,once:true});
@@ -1197,8 +1198,9 @@ var beepAudio=null;
 var beepPool=[];
 var beepPoolIdx=0;
 var BEEP_POOL_SIZE=5;
+var silentAudio=null; /* unlock 전용 무음 WAV */
 try{
-  /* 800Hz 단음 0.2초 WAV 생성 */
+  /* 800Hz 단음 0.2초 WAV 생성 (비프용) */
   var sampleRate=44100,duration=0.2,freq=800;
   var numSamples=Math.floor(sampleRate*duration);
   var buf=new ArrayBuffer(44+numSamples*2);
@@ -1219,13 +1221,29 @@ try{
   beepAudio=new Audio(blobUrl);
   beepAudio.volume=1.0;
   beepAudio.preload='auto';
-  /* 풀 생성 */
   for(var i=0;i<BEEP_POOL_SIZE;i++){
     var a=new Audio(blobUrl);
     a.volume=1.0;
     a.preload='auto';
     beepPool.push(a);
   }
+
+  /* 무음 WAV 0.05초 생성 (unlock 전용) */
+  var sNum=Math.floor(sampleRate*0.05);
+  var sBuf=new ArrayBuffer(44+sNum*2);
+  var sDv=new DataView(sBuf);
+  var sPos=0;
+  function swr(s){for(var i=0;i<s.length;i++)sDv.setUint8(sPos++,s.charCodeAt(i))}
+  swr('RIFF');sDv.setUint32(sPos,36+sNum*2,true);sPos+=4;swr('WAVEfmt ');
+  sDv.setUint32(sPos,16,true);sPos+=4;sDv.setUint16(sPos,1,true);sPos+=2;
+  sDv.setUint16(sPos,1,true);sPos+=2;sDv.setUint32(sPos,sampleRate,true);sPos+=4;
+  sDv.setUint32(sPos,sampleRate*2,true);sPos+=4;sDv.setUint16(sPos,2,true);sPos+=2;
+  sDv.setUint16(sPos,16,true);sPos+=2;swr('data');sDv.setUint32(sPos,sNum*2,true);sPos+=4;
+  /* 모든 샘플이 0 = 완전 무음 */
+  var sBlob=new Blob([sBuf],{type:'audio/wav'});
+  silentAudio=new Audio(URL.createObjectURL(sBlob));
+  silentAudio.volume=1.0;
+  silentAudio.preload='auto';
 }catch(e){}
 
 function playBeep(){
@@ -1280,9 +1298,10 @@ function getActiveReaders(){
 }
 
 function isValidCode(code){
-  /* 모든 형식 모드에서는 길이만 체크 */
-  if(allFormatsMode)return code&&code.length>=4;
-  /* 기본: 13자리 숫자만 */
+  if(!code)return false;
+  /* 모든 형식 모드: 길이만 체크 (QR/바코드 모두 허용) */
+  if(allFormatsMode)return code.length>=4;
+  /* 기본: 13자리 숫자만 (Code 128/EAN-13 + QR이라도 13자리 숫자면 OK) */
   return /^\d{13}$/.test(code);
 }
 
@@ -1584,7 +1603,7 @@ function startIOSQrScan(){
     var imgData=ctx.getImageData(0,0,w,h);
     var qr=jsQR(imgData.data,w,h,{inversionAttempts:'dontInvert'});
     if(qr&&qr.data)onCodeRead(qr.data);
-  },400);
+  },250);
 }
 
 function stopIOSQrScan(){
@@ -1623,11 +1642,14 @@ function restartQuagga(idx){try{Quagga.stop()}catch(e){}stopIOSQrScan();var cam=
   var cs=cam?{deviceId:{exact:cam.deviceId}}:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
   setTimeout(function(){Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),constraints:cs},
     decoder:{readers:getActiveReaders()},
-    locate:true,frequency:10,numOfWorkers:0},function(err){if(err)return;Quagga.start();activeTrack=null;
+    locate:true,frequency:10,numOfWorkers:0},function(err){if(err){startIOSQrScan();return}Quagga.start();activeTrack=null;
     try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
       scCamInfoEl.textContent=activeTrack.label||'카메라 '+(idx+1)}}catch(e){}
     startIOSQrScan();
-    try{if(cam)localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}});},300);
+    try{if(cam)localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}});
+    /* 보장: 1초 후에도 jsQR이 안 돌고 있으면 강제 시작 */
+    setTimeout(function(){if(!iosQrTimer)startIOSQrScan()},1000);
+  },300);
 }
 
 /* ══════════════════════════════════════
