@@ -479,7 +479,7 @@
   <div class="rv-manual">
     <div class="rv-manual-row">
       <input type="text" id="manualCode" placeholder="품목코드 직접 입력" autocomplete="off" autocapitalize="off" inputmode="numeric" pattern="[0-9]*">
-      <input type="number" id="manualQty" value="1" min="1" style="width:50px;text-align:center">
+      <input type="number" id="manualQty" value="1" min="1" inputmode="numeric" pattern="[0-9]*" style="width:50px;text-align:center">
       <button class="rv-manual-btn" onclick="addManualItem()">추가</button>
     </div>
   </div>
@@ -1190,10 +1190,14 @@ try{
 }catch(e){}
 
 function playBeep(){
-  /* iOS: HTML5 Audio (링거 OFF에서도 미디어 볼륨 사용) */
+  /* iOS: HTML5 Audio - cloneNode로 race condition 방지 */
   if(isIOS){
     if(beepAudio){
-      try{beepAudio.currentTime=0;beepAudio.play().catch(function(){})}catch(e){}
+      try{
+        var clone=beepAudio.cloneNode(true);
+        clone.volume=1.0;
+        clone.play().catch(function(){});
+      }catch(e){}
     }
     return;
   }
@@ -1548,7 +1552,7 @@ function renderReviewTable(){
       '<td class="name-cell">'+esc(name)+'</td>'+
       '<td class="loc-cell">'+esc(loc)+'</td>'+
       '<td style="text-align:center"><input type="number" class="qty-cell" data-code="'+esc(code)+
-      '" value="'+moveScannedItems[code]+'" min="1" onchange="updateQty(this)" onfocus="this.select()" onclick="this.select()"></td></tr>';
+      '" value="'+moveScannedItems[code]+'" min="1" inputmode="numeric" pattern="[0-9]*" onchange="updateQty(this)" onfocus="this.select()" onclick="this.select()"></td></tr>';
   }
   h+='</tbody></table>';
   document.getElementById('rvBody').innerHTML=h;
@@ -1620,6 +1624,7 @@ function addManualItem(){
   renderReviewTable();
   codeEl.value='';qtyEl.value='1';
   codeEl.focus();
+  confirmFeedback();
 }
 
 function closeReview(){document.getElementById('reviewOverlay').classList.remove('show')}
