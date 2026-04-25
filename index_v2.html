@@ -1637,18 +1637,10 @@ function startScanner(){
   }
   startWatchdog();
 
-  var savedId='';try{savedId=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
-  /* deviceId 기반 카메라 선택 폐기 → 저장된 ID 정리 */
+  /* localStorage SCAN_CAM_ID 정리 (deviceId 기반 카메라 선택 폐기) */
   try{localStorage.removeItem('SCAN_CAM_ID')}catch(e){}
 
-  /* facingMode: {exact: environment}로 후면 강제. deviceId는 라벨 신뢰 불가로 미사용 */
-  Html5Qrcode.getCameras().then(function(cams){
-    console.log('[scanner] cameras:',cams.map(function(c){return c.label||'(no label)'}).join(' | '));
-    allCameras=cams.map(function(c){return{deviceId:c.id,label:c.label}});
-    html5Cameras=cams;
-  }).catch(function(e){console.warn('getCameras failed:',e)});
-
-  /* 항상 facingMode로 시작 (Android 카메라 라벨이 일관되지 않아 deviceId 신뢰 어려움) */
+  /* facingMode로만 시작 (getCameras 호출 제거 - 카메라 권한 충돌 방지) */
   _startWithFacingMode();
 }
 
@@ -1703,25 +1695,15 @@ function _startWithCamera(idx){
 
 function _startWithFacingMode(){
   html5Scanner=_buildScanner();
-  /* 1차: exact environment (전면 fallback 차단) */
-  html5Scanner.start({facingMode:{exact:'environment'}},_scanConfig(false),onCodeDecoded,onCodeDecodeFail)
+  /* Android: loose environment로 충분 (exact는 일부 기기 호환성 문제 + 까만 화면 유발) */
+  html5Scanner.start({facingMode:'environment'},_scanConfig(false),onCodeDecoded,onCodeDecodeFail)
     .then(function(){
       scCamInfoEl.textContent='후면 카메라';
       _captureActiveTrack();
     })
     .catch(function(err){
-      console.warn('exact environment failed, trying loose:',err);
-      /* 2차 fallback: loose environment */
-      html5Scanner=_buildScanner();
-      html5Scanner.start({facingMode:'environment'},_scanConfig(false),onCodeDecoded,onCodeDecodeFail)
-        .then(function(){
-          scCamInfoEl.textContent='후면 카메라';
-          _captureActiveTrack();
-        })
-        .catch(function(err2){
-          console.error('camera start fail:',err2);
-          scCamInfoEl.textContent='카메라 권한 확인';
-        });
+      console.error('camera start fail:',err);
+      scCamInfoEl.textContent='카메라 권한 확인';
     });
 }
 
@@ -1879,6 +1861,14 @@ function initIOSScanner(){
   document.getElementById('iosScanner').style.display='block';
   document.getElementById('scanGuide').style.display='flex';
 
+  /* 이전 인스턴스 완전 정리 */
+  try{Quagga.stop()}catch(e){}
+  try{Quagga.offDetected()}catch(e){}
+  try{Quagga.offProcessed()}catch(e){}
+  stopIOSQROnly();
+  /* 컨테이너 비우기 (이전 video element 제거) */
+  document.getElementById('iosScanner').innerHTML='';
+
   /* 위치 모드 + 토글 OFF: Quagga 비활성, jsQR만 사용 (속도/배터리 최적화) */
   if(scanMode==='location'&&!allFormatsMode){
     initIOSQROnly();
@@ -1927,7 +1917,11 @@ function initIOSScanner(){
 function restartQuagga(){
   /* 위치 모드 + 토글 OFF: QR-only 재시작 */
   try{Quagga.stop()}catch(e){}
+  try{Quagga.offDetected()}catch(e){}
+  try{Quagga.offProcessed()}catch(e){}
   stopIOSQROnly();
+  /* 컨테이너 비우기 (이전 video element 제거) */
+  document.getElementById('iosScanner').innerHTML='';
   setTimeout(function(){
     if(scanMode==='location'&&!allFormatsMode){
       initIOSQROnly();
