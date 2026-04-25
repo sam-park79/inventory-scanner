@@ -1299,8 +1299,8 @@ function getActiveReaders(){
 
 function isValidCode(code){
   if(!code)return false;
-  /* 모든 형식 모드: 길이만 체크 (QR/바코드 모두 허용) */
-  if(allFormatsMode)return code.length>=4;
+  /* 모든 형식 모드: 8자 이상 + 알파벳/숫자만 (오인식 garbage 차단) */
+  if(allFormatsMode)return code.length>=8&&/^[A-Za-z0-9_\-]+$/.test(code);
   /* 기본: 13자리 숫자만 (Code 128/EAN-13 + QR이라도 13자리 숫자면 OK) */
   return /^\d{13}$/.test(code);
 }
@@ -1603,10 +1603,25 @@ function startIOSQrScan(){
     var imgData=ctx.getImageData(0,0,w,h);
     var qr=jsQR(imgData.data,w,h,{inversionAttempts:'dontInvert'});
     if(qr&&qr.data){
-      var dbg='[jsQR] '+qr.data.substring(0,30)+' len:'+qr.data.length+' valid:'+isValidCode(qr.data);
+      /* QR location을 검증해 진짜 QR인지 확인 (가짜 QR 차단) */
+      if(!qr.location||!qr.location.topLeftCorner)return;
+      /* QR 모서리 4점이 충분히 떨어져 있어야 진짜 QR */
+      var loc=qr.location;
+      var dx=loc.topRightCorner.x-loc.topLeftCorner.x;
+      var dy=loc.bottomLeftCorner.y-loc.topLeftCorner.y;
+      var qrSize=Math.min(Math.abs(dx),Math.abs(dy));
+      if(qrSize<60)return; /* 너무 작은 QR은 오인식 가능성 */
+
+      var dbg='[jsQR] '+qr.data.substring(0,30)+' len:'+qr.data.length+' size:'+Math.round(qrSize);
       console.log(dbg);
       scCamInfoEl.textContent=dbg;
-      onCodeRead(qr.data);
+      /* QR은 명백한 인식이므로 즉시 확정 (CONFIRM_COUNT 우회) */
+      if(scanMode==='move'){
+        if(qr.data===lastConfirmedCode&&Date.now()-lastConfirmedTime<3000)return;
+        lastConfirmedCode='';
+      }
+      lastCode=qr.data;matchCount=CONFIRM_COUNT;
+      onScanConfirmed(qr.data);
     }
   },250);
 }
@@ -1626,7 +1641,13 @@ function initIOSScanner(){
     try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
     startIOSQrScan();
     discoverCameras()});
-  Quagga.onDetected(function(result){if(result.codeResult.code)onCodeRead(result.codeResult.code)});
+  Quagga.onDetected(function(result){
+    var c=result.codeResult&&result.codeResult.code;
+    if(!c)return;
+    /* 1D 바코드는 최소 8자 이상 (가짜 짧은 결과 차단) */
+    if(c.length<8)return;
+    onCodeRead(c);
+  });
   Quagga.onProcessed(function(result){
     var detectedCode=result&&result.codeResult&&result.codeResult.code;
     if(detectedCode){
