@@ -1541,7 +1541,7 @@ function initIOSScanner(){
   Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
     constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
     decoder:{readers:['code_128_reader','ean_reader']},
-    locate:true,frequency:15,numOfWorkers:0
+    locate:true,frequency:10,numOfWorkers:0
   },function(err){if(err){scCamInfoEl.textContent='카메라 실패';return}
     Quagga.start();scCamInfoEl.textContent='iOS — QuaggaJS + QR';
     try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
@@ -1549,7 +1549,9 @@ function initIOSScanner(){
     discoverCameras()});
   Quagga.onDetected(function(result){if(result.codeResult.code)onCodeRead(result.codeResult.code)});
   Quagga.onProcessed(function(result){
-    if(result&&result.codeResult&&result.codeResult.code){
+    var detectedCode=result&&result.codeResult&&result.codeResult.code;
+    if(detectedCode){
+      /* 어떤 코드든 잡히면 emptyFrames 리셋 — 카메라가 진짜 비워야만 해제됨 */
       emptyFrames=0;
     }else{
       emptyFrames++;
@@ -1566,7 +1568,7 @@ function restartQuagga(idx){try{Quagga.stop()}catch(e){}stopIOSQrScan();var cam=
   var cs=cam?{deviceId:{exact:cam.deviceId}}:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
   setTimeout(function(){Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),constraints:cs},
     decoder:{readers:['code_128_reader','ean_reader']},
-    locate:true,frequency:15,numOfWorkers:0},function(err){if(err)return;Quagga.start();activeTrack=null;
+    locate:true,frequency:10,numOfWorkers:0},function(err){if(err)return;Quagga.start();activeTrack=null;
     try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
       scCamInfoEl.textContent=activeTrack.label||'카메라 '+(idx+1)}}catch(e){}
     startIOSQrScan();
