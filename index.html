@@ -478,7 +478,7 @@
   <div class="rv-body" id="rvBody"></div>
   <div class="rv-manual">
     <div class="rv-manual-row">
-      <input type="text" id="manualCode" placeholder="품목코드 직접 입력" autocomplete="off" autocapitalize="off">
+      <input type="text" id="manualCode" placeholder="품목코드 직접 입력" autocomplete="off" autocapitalize="off" inputmode="numeric" pattern="[0-9]*">
       <input type="number" id="manualQty" value="1" min="1" style="width:50px;text-align:center">
       <button class="rv-manual-btn" onclick="addManualItem()">추가</button>
     </div>
@@ -1143,12 +1143,26 @@ document.addEventListener('click',function(e){
    피드백
    ══════════════════════════════════════ */
 var audioCtx;try{audioCtx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}
+var audioUnlocked=false;
+var isAndroid=/Android/i.test(navigator.userAgent);
+var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
+
 function unlockAudio(){
+  if(audioUnlocked)return;
   if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume().catch(function(){});
-  if(beepAudio&&beepAudio.paused){try{beepAudio.play().then(function(){beepAudio.pause();beepAudio.currentTime=0}).catch(function(){})}catch(e){}}
+  /* iOS만 HTML5 Audio unlock 필요 (Android는 AudioContext만 사용) */
+  if(isIOS&&beepAudio){
+    try{
+      beepAudio.muted=true;
+      beepAudio.play().then(function(){
+        beepAudio.pause();beepAudio.currentTime=0;beepAudio.muted=false;
+      }).catch(function(){beepAudio.muted=false});
+    }catch(e){}
+  }
+  audioUnlocked=true;
 }
-document.addEventListener('touchstart',unlockAudio,{passive:true});
-document.addEventListener('click',unlockAudio,{passive:true});
+document.addEventListener('touchstart',unlockAudio,{passive:true,once:true});
+document.addEventListener('click',unlockAudio,{passive:true,once:true});
 
 /* iOS fallback: HTML5 Audio (링거 스위치 OFF에서도 미디어 볼륨으로 재생) */
 var beepAudio=null;
@@ -1176,20 +1190,23 @@ try{
 }catch(e){}
 
 function playBeep(){
-  /* iOS: HTML5 Audio 우선 시도 */
-  if(beepAudio){
-    try{beepAudio.currentTime=0;beepAudio.play().catch(function(){})}catch(e){}
+  /* iOS: HTML5 Audio (링거 OFF에서도 미디어 볼륨 사용) */
+  if(isIOS){
+    if(beepAudio){
+      try{beepAudio.currentTime=0;beepAudio.play().catch(function(){})}catch(e){}
+    }
+    return;
   }
-  /* Android: AudioContext 비프음 */
-  if(!audioCtx)return;unlockAudio();
-  setTimeout(function(){try{var t=audioCtx.currentTime;
+  /* Android: AudioContext만 사용 (소리 모드일 때만 들림) */
+  if(!audioCtx)return;
+  try{var t=audioCtx.currentTime;
     var o1=audioCtx.createOscillator(),g1=audioCtx.createGain();
     o1.type='square';o1.frequency.value=1200;g1.gain.value=1.0;
     o1.connect(g1);g1.connect(audioCtx.destination);o1.start(t);o1.stop(t+0.15);
     var o2=audioCtx.createOscillator(),g2=audioCtx.createGain();
     o2.type='square';o2.frequency.value=1600;g2.gain.value=1.0;
     o2.connect(g2);g2.connect(audioCtx.destination);o2.start(t+0.18);o2.stop(t+0.35);
-  }catch(e){}},30);
+  }catch(e){}
 }
 
 function confirmFeedback(){
