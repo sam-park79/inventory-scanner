@@ -230,7 +230,7 @@
       -o-object-fit:cover;object-fit:cover;position:absolute;top:0;left:0}
     #iosScanner canvas.drawingBuffer{display:none!important}
     .sc-guide-wrap{position:fixed;inset:0;z-index:410;pointer-events:none;display:flex;align-items:center;justify-content:center}
-    .sc-guide{position:relative;width:90%;max-width:440px;aspect-ratio:1.8/1;border:2.5px solid var(--green);
+    .sc-guide{position:relative;width:96%;max-width:480px;aspect-ratio:2/1;border:2.5px solid var(--green);
       border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.5);transition:background .1s,border-color .1s}
     .sc-guide-flash{background:rgba(52,211,153,.4);border-color:#fff}
     .sc-guide-line{position:absolute;left:8%;right:8%;top:15%;height:2px;background:var(--green);border-radius:2px;
@@ -1350,11 +1350,13 @@ function getActiveFormats(){
 
 function isValidCode(code){
   if(!code)return false;
-  /* QR은 디코더가 정확하므로 길이 검증 없음 (형식만 맞으면 통과) */
+  /* QR 코드 */
   if(lastDecodedIsQR){
-    return true;
+    /* 토글 OFF: QR도 13자리만, 토글 ON: 모든 QR 통과 */
+    if(allFormatsMode)return true;
+    return /^\d{13}$/.test(code);
   }
-  /* 1D 바코드: 모든 형식 모드면 8자 이상 + 영숫자, 기본은 13자리 숫자 */
+  /* 1D 바코드: 토글 ON은 8자 이상 영숫자, 토글 OFF는 정확히 13자리 숫자 */
   if(allFormatsMode)return code.length>=8&&/^[A-Za-z0-9_\-]+$/.test(code);
   return /^\d{13}$/.test(code);
 }
@@ -1718,9 +1720,9 @@ function _scanConfig(useCamId){
   var cfg={
     fps:15,
     qrbox:function(vw,vh){
-      /* 가이드 박스와 동일: 화면 90% 너비, 1.8:1 비율 */
-      var w=Math.floor(Math.min(vw,vh*1.8)*0.9);
-      var h=Math.floor(w/1.8);
+      /* 가이드 박스와 동일: 화면 96% 너비, 2:1 비율 */
+      var w=Math.floor(Math.min(vw,vh*2)*0.96);
+      var h=Math.floor(w/2);
       return {width:w,height:h};
     },
     aspectRatio:1.7777,
@@ -1766,8 +1768,26 @@ function _captureActiveTrack(){
       var v=document.querySelector('#html5Reader video');
       if(v&&v.srcObject){
         activeTrack=v.srcObject.getVideoTracks()[0];
+        var caps=activeTrack.getCapabilities?activeTrack.getCapabilities():{};
         var s=activeTrack.getSettings?activeTrack.getSettings():{};
-        console.log('[scanner] resolution:',s.width+'x'+s.height,'zoom:',s.zoom);
+        console.log('[scanner] resolution:',s.width+'x'+s.height,'caps.zoom:',caps.zoom);
+
+        /* 광각 카메라 자동 회피: zoom.min < 1.0 = 광각 → 다음 후면 카메라로 자동 전환
+           (확대 X, 다른 메인 카메라 선택만) */
+        if(caps.zoom&&typeof caps.zoom.min==='number'&&caps.zoom.min<0.99&&html5Cameras.length>1){
+          var tries=0;
+          try{tries=parseInt(sessionStorage.getItem('SCAN_CAM_TRY')||'0')}catch(e){}
+          if(tries<html5Cameras.length){
+            try{sessionStorage.setItem('SCAN_CAM_TRY',(tries+1).toString())}catch(e){}
+            console.log('[scanner] wide cam detected (zoom.min='+caps.zoom.min+'), switching to next cam ('+(tries+1)+'/'+html5Cameras.length+')');
+            currentCamIndex=(currentCamIndex+1)%html5Cameras.length;
+            try{localStorage.setItem('SCAN_CAM_ID',html5Cameras[currentCamIndex].id)}catch(e){}
+            restartScanner();
+            return;
+          }
+        }
+        /* 메인 카메라 잡힘 → 시도 카운터 리셋 */
+        try{sessionStorage.removeItem('SCAN_CAM_TRY')}catch(e){}
       }
     }catch(e){}
   },500);
@@ -1812,10 +1832,10 @@ function startIOSQrScan(){
     if(!vid||vid.readyState<2)return;
     var w=vid.videoWidth,h=vid.videoHeight;
     if(!w||!h)return;
-    /* 가이드 박스 영역만 캔버스에 그리기 (화면 90% 너비, 1.8:1 aspect) */
-    var boxW=Math.floor(w*0.9);
-    var boxH=Math.floor(boxW/1.8);
-    if(boxH>h*0.9){boxH=Math.floor(h*0.9);boxW=Math.floor(boxH*1.8)}
+    /* 가이드 박스 영역만 캔버스에 그리기 (화면 96% 너비, 2:1 aspect) */
+    var boxW=Math.floor(w*0.96);
+    var boxH=Math.floor(boxW/2);
+    if(boxH>h*0.9){boxH=Math.floor(h*0.9);boxW=Math.floor(boxH*2)}
     var sx=Math.floor((w-boxW)/2);
     var sy=Math.floor((h-boxH)/2);
     iosQrCanvas.width=boxW;iosQrCanvas.height=boxH;
@@ -1858,13 +1878,13 @@ function initIOSQROnly(){
   container.appendChild(video);
 
   navigator.mediaDevices.getUserMedia({
-    video:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}},
+    video:{facingMode:{exact:'environment'},width:{ideal:1920,min:1280},height:{ideal:1080,min:720}},
     audio:false
   })
   .catch(function(){
     /* fallback: loose */
     return navigator.mediaDevices.getUserMedia({
-      video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}},
+      video:{facingMode:'environment',width:{ideal:1920,min:1280},height:{ideal:1080,min:720}},
       audio:false
     });
   })
@@ -1917,18 +1937,18 @@ function initIOSScanner(){
     return;
   }
 
-  Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'30%',right:'5%',left:'5%',bottom:'30%'},
-    constraints:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}}},
-    decoder:{readers:getActiveReaders()},
-    locate:true,frequency:15,numOfWorkers:0
+  Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'25%',right:'2%',left:'2%',bottom:'25%'},
+    constraints:{facingMode:{exact:'environment'},width:{ideal:1920,min:1280},height:{ideal:1080,min:720}}},
+    decoder:{readers:getActiveReaders(),multiple:false},
+    locator:{patchSize:'large',halfSample:false},locate:true,frequency:15,numOfWorkers:0
   },function(err){
     if(err){
       console.warn('exact environment failed, retrying loose:',err);
       /* fallback: loose environment */
-      Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'30%',right:'5%',left:'5%',bottom:'30%'},
-        constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
-        decoder:{readers:getActiveReaders()},
-        locate:true,frequency:15,numOfWorkers:0
+      Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'25%',right:'2%',left:'2%',bottom:'25%'},
+        constraints:{facingMode:'environment',width:{ideal:1920,min:1280},height:{ideal:1080,min:720}}},
+        decoder:{readers:getActiveReaders(),multiple:false},
+        locator:{patchSize:'large',halfSample:false},locate:true,frequency:15,numOfWorkers:0
       },function(err2){
         if(err2){console.error('Quagga init fail:',err2);return}
         Quagga.start();
@@ -1969,16 +1989,16 @@ function restartQuagga(){
       initIOSQROnly();
       return;
     }
-    Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'30%',right:'5%',left:'5%',bottom:'30%'},
-      constraints:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}}},
-      decoder:{readers:getActiveReaders()},
-      locate:true,frequency:15,numOfWorkers:0},function(err){
+    Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'25%',right:'2%',left:'2%',bottom:'25%'},
+      constraints:{facingMode:{exact:'environment'},width:{ideal:1920,min:1280},height:{ideal:1080,min:720}}},
+      decoder:{readers:getActiveReaders(),multiple:false},
+      locator:{patchSize:'large',halfSample:false},locate:true,frequency:15,numOfWorkers:0},function(err){
         if(err){
           /* fallback: loose */
-          Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'30%',right:'5%',left:'5%',bottom:'30%'},
-            constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
-            decoder:{readers:getActiveReaders()},
-            locate:true,frequency:15,numOfWorkers:0},function(err2){
+          Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'25%',right:'2%',left:'2%',bottom:'25%'},
+            constraints:{facingMode:'environment',width:{ideal:1920,min:1280},height:{ideal:1080,min:720}}},
+            decoder:{readers:getActiveReaders(),multiple:false},
+            locator:{patchSize:'large',halfSample:false},locate:true,frequency:15,numOfWorkers:0},function(err2){
               if(err2){startIOSQrScan();return}
               Quagga.start();activeTrack=null;
               try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
