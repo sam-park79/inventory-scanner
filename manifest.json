@@ -1,7 +1,7 @@
 {
-  "name": "NEBBIA 재고 확인",
-  "short_name": "NEBBIA 재고 확인",
-  "description": "NEBBIA 재고 확인_바코드",
+  "name": "NEBBIA\n재고 확인",
+  "short_name": "NEBBIA\n재고 확인",
+  "description": "바코드 스캔 + 재고 확인 및 관리",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
