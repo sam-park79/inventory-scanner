@@ -1960,10 +1960,10 @@ function initIOSScanner(){
   _attachQuaggaHandlers();
 }
 
-var quaggaHandlersAttached=false;
 function _attachQuaggaHandlers(){
-  if(quaggaHandlersAttached)return; /* 중복 등록 방지 (Quagga onDetected는 array에 누적됨) */
-  quaggaHandlersAttached=true;
+  /* 매번 호출되므로 기존 핸들러 정리 후 재등록 (정확히 1개 유지) */
+  try{Quagga.offDetected()}catch(e){}
+  try{Quagga.offProcessed()}catch(e){}
   Quagga.onDetected(function(result){
     var c=result.codeResult&&result.codeResult.code;
     if(!c)return;
