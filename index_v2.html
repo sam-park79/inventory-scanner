@@ -576,6 +576,20 @@
 
 
 <script>
+/* 모바일 콘솔 (Eruda) - URL에 ?debug 또는 #debug 있으면 활성화
+   사용: 휴대폰 브라우저에서 URL 끝에 ?debug 추가 후 새로고침
+   화면 우측에 떠있는 "기어 아이콘" 누르면 콘솔, 네트워크 등 패널 확인 가능 */
+(function(){
+  if(location.search.indexOf('debug')>=0||location.hash.indexOf('debug')>=0){
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/eruda';
+    document.head.appendChild(s);
+    s.onload=function(){try{eruda.init()}catch(e){}};
+  }
+})();
+</script>
+
+<script>
 var API_URL='https://script.google.com/macros/s/AKfycbzrVSkWebWfBtld-HDNrLM66ndMfDvbVwLm5ROTLOJk5oBL9P9HfLlnsHentsXexSMG/exec';
 
 var qEl=document.getElementById('q');
