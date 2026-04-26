@@ -2,13 +2,20 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="재고확인">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <title>재고 조회</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <style>
@@ -148,7 +155,8 @@
     .var-card{background:rgba(251,191,36,.06);border:1px solid rgba(251,191,36,.15);
       border-radius:10px;padding:10px 12px;margin-bottom:6px}
     .var-card .vc-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
-    .var-card .vc-code{font-size:13px;font-weight:600;color:var(--orange);font-family:monospace;cursor:pointer}
+    .var-card .vc-code{font-size:12px;font-weight:600;color:var(--accent);background:rgba(79,140,255,.12);padding:2px 8px;border-radius:6px;cursor:pointer;-webkit-user-select:none;user-select:none}
+    .var-card .vc-code:active{background:rgba(79,140,255,.3)}
     .var-card .vc-name{font-size:13px;color:var(--text);cursor:pointer;word-break:break-word}
     .var-card .vc-loc{font-size:12px;font-weight:600;color:var(--orange)}
     .var-card .vc-qty{font-size:13px;font-weight:700;color:var(--green);margin-left:auto}
@@ -205,35 +213,47 @@
     .sc-toggle:active{background:rgba(255,255,255,.1)}
     .sc-toggle input{display:none}
     .sc-toggle-slider{width:46px;height:26px;background:rgba(255,255,255,.2);border-radius:13px;
-      position:relative;transition:background .2s;flex-shrink:0}
+      position:relative;transition:background .05s;flex-shrink:0}
     .sc-toggle-slider::after{content:'';position:absolute;top:2px;left:2px;width:22px;height:22px;
-      background:#fff;border-radius:50%;transition:transform .2s}
+      background:#fff;border-radius:50%;transition:transform .05s}
     .sc-toggle input:checked+.sc-toggle-slider{background:var(--accent)}
     .sc-toggle input:checked+.sc-toggle-slider::after{transform:translateX(20px)}
     .sc-toggle-label{font-size:13px;color:#fff;font-weight:500}
     .sc-counter .cnt{font-size:14px;font-weight:700;color:var(--orange)}
     .sc-counter .last{font-size:11px;color:var(--text2);margin-top:2px}
 
-    .sc-camera{flex:1;position:relative;display:flex;align-items:center;justify-content:center;background:#000;overflow:hidden}
-    #scanVideo{width:100%;height:100%;-o-object-fit:cover;object-fit:cover}
-    .sc-guide-wrap{position:fixed;inset:0;z-index:410;pointer-events:none;display:flex;align-items:center;justify-content:center}
-    .sc-guide{position:relative;width:90%;max-width:440px;aspect-ratio:1.8/1;border:2.5px solid var(--green);
-      border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.5)}
-    .sc-guide-line{position:absolute;left:8%;right:8%;top:15%;height:2px;background:var(--green);border-radius:2px;
-      opacity:.7;will-change:transform;transform:translate3d(0,0,0);backface-visibility:hidden;-webkit-backface-visibility:hidden}
-    .sc-guide-line.animate{animation:scanAnim 2s ease-in-out infinite alternate}
-    @keyframes scanAnim{from{transform:translate3d(0,0,0)}to{transform:translate3d(0,var(--scan-dist,200px),0)}}
+    #html5Reader{flex:1;background:#000;position:relative;overflow:hidden}
+    #html5Reader video{width:100%!important;height:100%!important;-o-object-fit:cover;object-fit:cover;
+      position:absolute;top:0;left:0;display:block!important}
+    /* html5-qrcode 라이브러리가 추가하는 자체 UI 숨김 (Powered by, 토치 버튼 등) */
+    #html5Reader > div{background:transparent!important;border:none!important}
+    #html5Reader img,#html5Reader [data-testid="qr-code-overlay-shaded-region"]{display:none!important}
+    #html5Reader [aria-label="An embedded link to scanapp.org"]{display:none!important}
+    #html5Reader > div > div:not([id^="qr-shaded-region"]){display:none!important}
+    /* iOS: QuaggaJS + jsQR 컨테이너 */
     #iosScanner{flex:1;background:#000;display:none;position:relative;overflow:hidden}
     #iosScanner video,#iosScanner canvas{width:100%!important;height:100%!important;
       -o-object-fit:cover;object-fit:cover;position:absolute;top:0;left:0}
     #iosScanner canvas.drawingBuffer{display:none!important}
+    .sc-guide-wrap{position:fixed;inset:0;z-index:410;pointer-events:none;display:flex;align-items:center;justify-content:center}
+    .sc-guide{position:relative;width:96%;max-width:480px;aspect-ratio:2/1;border:2.5px solid var(--green);
+      border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.5);transition:background .1s,border-color .1s}
+    .sc-guide-flash{background:rgba(52,211,153,.4);border-color:#fff}
+    .sc-guide-line{position:absolute;left:8%;right:8%;top:15%;height:2px;background:var(--green);border-radius:2px;
+      opacity:.7;will-change:transform;transform:translate3d(0,0,0);backface-visibility:hidden;-webkit-backface-visibility:hidden}
+    .sc-guide-line.animate{animation:scanAnim 2s ease-in-out infinite alternate}
+    @keyframes scanAnim{from{transform:translate3d(0,0,0)}to{transform:translate3d(0,var(--scan-dist,200px),0)}}
 
     .sc-bottom{position:fixed;bottom:0;left:0;right:0;z-index:420;background:rgba(15,17,23,.85);
       -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
       padding:8px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));text-align:center}
     .sc-hint{font-size:12px;color:var(--text2)}
-    .sc-read{font-size:11px;color:var(--green);margin-top:2px;min-height:15px;font-weight:600}
-    .sc-cam-info{font-size:11px;color:#ffeb3b;margin-top:2px;word-break:break-all;padding:0 8px}
+    .sc-read{font-size:11px;color:var(--green);margin-top:2px;min-height:15px;font-weight:600;
+      cursor:pointer;padding:8px 14px;border-radius:8px;display:inline-block;
+      -webkit-tap-highlight-color:transparent;transition:background .1s}
+    .sc-read:active{background:rgba(52,211,153,.2)}
+    .sc-read:empty{padding:0}
+    .sc-cam-info{display:none}
     .btn-scan-done{margin-top:10px;width:100%;height:52px;border:none;border-radius:14px;
       background:var(--orange);color:#000;font-size:16px;font-weight:700;font-family:var(--font);cursor:pointer;display:none}
     .btn-scan-done.show{display:block}
@@ -363,7 +383,7 @@
     .result-ok:active{background:var(--accent2)}
 
     @keyframes sp{to{transform:rotate(360deg)}}
-    #cropCanvas{display:none}
+
   </style>
 </head>
 <body>
@@ -466,12 +486,12 @@
     <div class="cnt" id="scCnt">스캔: 0건</div>
     <div class="last" id="scLast"></div>
   </div>
-  <div class="sc-camera" id="androidCam"><video id="scanVideo" autoplay playsinline muted></video></div>
-  <div class="sc-guide-wrap" id="scanGuide"><div class="sc-guide"><div class="sc-guide-line"></div></div></div>
+  <div id="html5Reader"></div>
   <div id="iosScanner"></div>
+  <div class="sc-guide-wrap" id="scanGuide"><div class="sc-guide"><div class="sc-guide-line"></div></div></div>
   <div class="sc-bottom">
     <div class="sc-hint">바코드를 카메라에 비춰주세요</div>
-    <div class="sc-read" id="scRead"></div>
+    <div class="sc-read" id="scRead" onclick="manualConfirmCode()"></div>
     <div class="sc-cam-info" id="scCamInfo"></div>
     <div class="sc-toggle-wrap" id="scToggleWrap">
       <label class="sc-toggle">
@@ -559,7 +579,32 @@
   </div>
 </div>
 
-<canvas id="cropCanvas"></canvas>
+
+
+<script>
+/* PWA Service Worker 등록 - 홈 화면 추가 / standalone 모드 활성화 */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(e){
+      console.warn('SW register failed:',e);
+    });
+  });
+}
+</script>
+
+<script>
+/* 모바일 콘솔 (Eruda) - URL에 ?debug 또는 #debug 있으면 활성화
+   사용: 휴대폰 브라우저에서 URL 끝에 ?debug 추가 후 새로고침
+   화면 우측에 떠있는 "기어 아이콘" 누르면 콘솔, 네트워크 등 패널 확인 가능 */
+(function(){
+  if(location.search.indexOf('debug')>=0||location.hash.indexOf('debug')>=0){
+    var s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/eruda';
+    document.head.appendChild(s);
+    s.onload=function(){try{eruda.init()}catch(e){}};
+  }
+})();
+</script>
 
 <script>
 var API_URL='https://script.google.com/macros/s/AKfycbzrVSkWebWfBtld-HDNrLM66ndMfDvbVwLm5ROTLOJk5oBL9P9HfLlnsHentsXexSMG/exec';
@@ -572,8 +617,7 @@ var dataStatusEl=document.getElementById('dataStatus');
 var scReadEl=document.getElementById('scRead');
 var scCamInfoEl=document.getElementById('scCamInfo');
 
-var useNative='BarcodeDetector' in window;
-var CONFIRM_COUNT=3;
+var CONFIRM_COUNT=2;
 var MAX_RESULTS=100;
 
 /* ══════════════════════════════════════
@@ -848,9 +892,22 @@ function fallbackCopy(text,el){
 }
 
 function showCopyToast(el){
-  var orig=el.textContent;
-  el.textContent='✓ 복사됨';el.style.background='rgba(52,211,153,.25)';
-  setTimeout(function(){el.textContent=orig;el.style.background=''},1000);
+  /* 짧고 일관된 floating tip 표시 (텍스트 교체 방식 X) */
+  var tip=document.getElementById('copyTip');
+  if(!tip){
+    tip=document.createElement('div');
+    tip.id='copyTip';
+    tip.style.cssText='position:fixed;background:rgba(52,211,153,.95);color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;z-index:9999;pointer-events:none;opacity:0;transition:opacity .15s;box-shadow:0 4px 12px rgba(0,0,0,.3)';
+    document.body.appendChild(tip);
+  }
+  tip.textContent='✓ 복사됨';
+  /* 엘리먼트 위에 띄우기 */
+  var r=el.getBoundingClientRect();
+  tip.style.left=(r.left+r.width/2-40)+'px';
+  tip.style.top=(r.top-32)+'px';
+  tip.style.opacity='1';
+  clearTimeout(tip._hideTimer);
+  tip._hideTimer=setTimeout(function(){tip.style.opacity='0'},800);
 }
 
 /* ══════════════════════════════════════
@@ -1272,36 +1329,75 @@ function playBeep(){
   }catch(e){}
 }
 
+var lastFeedbackTime=0;
 function confirmFeedback(){
+  /* 200ms 내 중복 호출 차단 (비프음 중첩 방지) */
+  var now=Date.now();
+  if(now-lastFeedbackTime<200)return;
+  lastFeedbackTime=now;
+
+  /* iOS: 매번 audio context 재개 시도 */
+  unlockAudio();
+  if(audioCtx&&audioCtx.state==='suspended'){
+    audioCtx.resume().catch(function(){});
+  }
+
   if(window.navigator&&typeof window.navigator.vibrate==='function'){try{window.navigator.vibrate(400)}catch(e){}}
   playBeep();
+
+  /* 시각적 피드백: 가이드 박스 깜빡 */
+  var guide=document.querySelector('.sc-guide');
+  if(guide){
+    guide.classList.add('sc-guide-flash');
+    setTimeout(function(){guide.classList.remove('sc-guide-flash')},250);
+  }
 }
 
 /* ══════════════════════════════════════
    스캐너
    ══════════════════════════════════════ */
 var allCameras=[],currentCamIndex=0;
-var scanVideo,cropCanvas,cropCtx,nativeDetector,scanTimer;
+var scanTimer; /* legacy: 미사용 */
 var scanned=false,lastCode='',matchCount=0,torchOn=false,activeTrack=null;
 var scanMode='search'; /* 'search' | 'move' */
 var moveScannedItems={}; /* {code: qty} */
 var moveScannedTotal=0;
 var lastConfirmedCode=''; /* 이동모드: 마지막 확정 코드 (같은 바코드 연속 방지) */
 var lastConfirmedTime=0; /* 마지막 확정 시각 (cooldown 관리) */
+var lastDecodeTime=0; /* 마지막 디코드 콜백 시각 (watchdog용) */
+var watchdogTimer=null;
+var recentCodes=[]; /* 최근 5번 디코드 결과 (1D 바코드 빈도 기반 누적용) */
+var pendingCode=''; /* scRead에 표시 중인 코드 (탭하면 수동 확정) */
+var lastJsQRTime=0; /* jsQR이 마지막 QR 디코드한 시각 (Quagga의 QR 영역 오인식 차단용) */
 var allFormatsMode=false; /* 모든 바코드 형식 인식 모드 */
 
-function getActiveReaders(){
-  if(allFormatsMode){
-    return ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','upc_reader','upc_e_reader','i2of5_reader','codabar_reader'];
+function getActiveFormats(){
+  if(typeof Html5QrcodeSupportedFormats==='undefined')return undefined;
+  var F=Html5QrcodeSupportedFormats;
+  /* 위치 모드: QR만 (전체 모드면 바코드도) */
+  if(scanMode==='location'){
+    return allFormatsMode
+      ? [F.QR_CODE,F.CODE_128,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_39,F.ITF,F.CODABAR]
+      : [F.QR_CODE]; /* 위치 기본은 QR 단일 → 인식 속도 최대화 */
   }
-  return ['code_128_reader','ean_reader'];
+  /* 검색/이동: 바코드 + QR */
+  return allFormatsMode
+    ? [F.CODE_128,F.EAN_13,F.EAN_8,F.UPC_A,F.UPC_E,F.CODE_39,F.ITF,F.CODABAR,F.QR_CODE]
+    : [F.CODE_128,F.EAN_13,F.QR_CODE]; /* 기본 3종만 → 빠름 */
 }
 
 function isValidCode(code){
   if(!code)return false;
-  /* 모든 형식 모드: 8자 이상 + 알파벳/숫자만 (오인식 garbage 차단) */
-  if(allFormatsMode)return code.length>=8&&/^[A-Za-z0-9_\-]+$/.test(code);
-  /* 기본: 13자리 숫자만 (Code 128/EAN-13 + QR이라도 13자리 숫자면 OK) */
+  /* QR 코드 */
+  if(lastDecodedIsQR){
+    /* 위치 모드 QR: 자리수 무관 (위치 QR은 한글/URL/숫자 등 다양한 형식 사용) */
+    if(scanMode==='location')return true;
+    /* 검색/이동 모드 토글 OFF: QR도 13자리 숫자만, 토글 ON: 모든 QR 통과 */
+    if(allFormatsMode)return true;
+    return /^\d{13}$/.test(code);
+  }
+  /* 1D 바코드: 토글 ON은 12자 이상 영숫자 (짧은 부정확 디코드 차단), 토글 OFF는 정확히 13자리 숫자 */
+  if(allFormatsMode)return code.length>=12&&/^[A-Za-z0-9_\-]+$/.test(code);
   return /^\d{13}$/.test(code);
 }
 
@@ -1315,9 +1411,12 @@ function toggleAllFormats(cb){
     msg=allFormatsMode?'모든 바코드 형식 인식 ON':'기본 형식만 인식 (Code 128, EAN-13)';
   }
   showToast(msg);
-  /* QuaggaJS 재시작 (새 디코더 적용) */
-  if(!useNative&&document.getElementById('scannerOverlay').classList.contains('show')){
-    restartQuagga(currentCamIndex);
+  /* 카메라 재시작은 60ms 후로 미룸 (토글 슬라이더 transition 0.05s 완료 보장)
+     무거운 작업(Quagga.stop, init/start, video element 재생성)이 메인 스레드를
+     차단해 토글 시각 변경이 늦어 보이는 문제 회피. 위치 모드처럼 모드 전환
+     자체가 무거운 케이스도 커버. */
+  if(document.getElementById('scannerOverlay').classList.contains('show')){
+    setTimeout(restartScanner,60);
   }
 }
 
@@ -1338,11 +1437,21 @@ var emptyFrames=0; /* 바코드 미감지 연속 프레임 수 */
 var EMPTY_THRESHOLD=15; /* 이 횟수 이상 빈 프레임이어야 해제 (~1.5초) */
 
 function openScanner(mode){
+  unlockAudio(); /* 사용자 제스처(클릭)로 진입 → audio 강제 unlock */
   scanMode=mode||'search';
   scanned=false;lastCode='';matchCount=0;torchOn=false;lastConfirmedCode='';emptyFrames=0;
+  recentCodes=[];pendingCode=''; /* 빈도 누적 + 수동 확정 후보 리셋 */
+  /* AOS: 광각/망원 회피용 시도 카운터만 리셋. 카메라 선택(SCAN_CAM_ID)은 유지
+     (사용자가 한 번 메인 카메라가 잡힌 후 모달 닫고 다시 열면 같은 메인 카메라로 시작) */
+  if(!isIOS){
+    try{sessionStorage.removeItem('SCAN_CAM_TRY')}catch(e){}
+  }
+  lastDecodeTime=Date.now();
   scReadEl.textContent='';scCamInfoEl.textContent='';
   document.getElementById('btnTorch').classList.remove('active');
   document.getElementById('scannerOverlay').classList.add('show');
+  /* iOS는 카메라 전환 버튼 비활성 (OS가 후면 자동 선택, deviceId 기반 전환 미지원) */
+  document.getElementById('btnSwitch').style.display=isIOS?'none':'';
 
   /* 스캔 바 애니메이션 거리를 가이드 박스 높이에 맞춰 설정 (GPU 가속) */
   setTimeout(function(){
@@ -1372,12 +1481,12 @@ function openScanner(mode){
     document.getElementById('btnScanDone').classList.remove('show');
   }
 
-  if(useNative)initAndroidScanner();else initIOSScanner();
+  startScanner();
 }
 
 function closeScanner(){
   document.getElementById('scannerOverlay').classList.remove('show');
-  if(useNative)stopAndroid();else{try{Quagga.stop()}catch(e){}stopIOSQrScan();}
+  stopScanner();
 }
 
 function closeScannerBtn(){
@@ -1457,30 +1566,33 @@ function resumeMoveScan(){
   document.getElementById('scLast').textContent='';
   document.getElementById('scannerOverlay').classList.add('show');
   histPush();
-  if(useNative)initAndroidScanner();else initIOSScanner();
+  startScanner();
 }
 
 function discoverCameras(){
-  return navigator.mediaDevices.enumerateDevices().then(function(devs){
-    allCameras=devs.filter(function(d){if(d.kind!=='videoinput')return false;
-      var l=(d.label||'').toLowerCase();return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0});
-    if(!allCameras.length)allCameras=devs.filter(function(d){return d.kind==='videoinput'});
-    var s='';try{s=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
-    if(s){for(var i=0;i<allCameras.length;i++){if(allCameras[i].deviceId===s){currentCamIndex=i;break}}}
-    if(allCameras.length>0)document.getElementById('btnSwitch').textContent='🔄 카메라 전환 ('+allCameras.length+'대)';
-  });
+  /* html5-qrcode가 직접 처리, 호환용 더미 */
+  return Promise.resolve();
 }
 
 function switchCamera(){
-  if(allCameras.length<=1){scCamInfoEl.textContent='전환 불가';return}
+  if(!allCameras||allCameras.length<=1){
+    /* 카메라 목록이 비어있거나 1개뿐 → 명확한 피드백 (사용자가 "반응 없음"으로 오해하지 않도록) */
+    var n=allCameras?allCameras.length:0;
+    showToast(n===0?'카메라 목록 로딩 중... 잠시 후 다시 시도':'후면 카메라가 1개뿐입니다');
+    return;
+  }
   currentCamIndex=(currentCamIndex+1)%allCameras.length;
+  /* 사용자 명시 선택은 sessionStorage에 저장 (탭 닫으면 정리되어 새 세션엔 항상 메인부터) */
+  try{sessionStorage.setItem('SCAN_CAM_ID_SESSION',allCameras[currentCamIndex].deviceId)}catch(e){}
+  try{sessionStorage.setItem('SCAN_CAM_LABEL_SESSION',allCameras[currentCamIndex].label||'')}catch(e){}
+  showToast('카메라 '+(currentCamIndex+1)+'/'+allCameras.length+'로 전환');
   lastCode='';matchCount=0;scReadEl.textContent='';torchOn=false;
   document.getElementById('btnTorch').classList.remove('active');
-  if(useNative)startAndroidCam(currentCamIndex);else restartQuagga(currentCamIndex);
+  restartScanner();
 }
 
 function toggleTorch(){
-  if(!activeTrack){try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}}
+  if(!activeTrack){try{var v=document.querySelector('#html5Reader video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}}
   if(!activeTrack)return;
   try{var caps=activeTrack.getCapabilities?activeTrack.getCapabilities():{};if(!caps.torch)return;torchOn=!torchOn;
     activeTrack.applyConstraints({advanced:[{torch:torchOn}]}).then(function(){
@@ -1488,9 +1600,111 @@ function toggleTorch(){
 }
 
 function onCodeRead(code){
+  lastDecodeTime=Date.now();
   if(scanned&&scanMode==='search')return;
+
+  /* 위치 모드 처리 */
   if(scanMode==='location'){
-    /* 위치 모드는 QR이라 검증 스킵 */
+    /* 위치 모드 + 토글 OFF: QR만 허용 (1D 바코드는 차단) */
+    if(!allFormatsMode&&!lastDecodedIsQR)return;
+    if(scanned)return;
+
+    /* QR은 즉시 확정 (디코더 정확도 높음) */
+    if(lastDecodedIsQR){
+      if(!isValidCode(code))return;
+      scanned=true;
+      confirmFeedback();
+      document.getElementById('locInput').value=code;
+      closeScanner();
+      if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back();}
+      setTimeout(function(){
+        scanMode='search';
+        document.getElementById('locModal').classList.add('show');
+      },100);
+      return;
+    }
+
+    /* 1D 바코드: 빈도 기반 누적 (voting) */
+    if(!isValidCode(code))return;
+    var loc=_voteCode(code);
+    pendingCode=loc.code;
+    scReadEl.textContent='✓ '+loc.code+' ('+loc.count+'/'+CONFIRM_COUNT+')';
+    if(loc.count>=CONFIRM_COUNT){
+      scanned=true;
+      recentCodes=[];pendingCode='';
+      confirmFeedback();
+      document.getElementById('locInput').value=loc.code;
+      closeScanner();
+      if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back();}
+      setTimeout(function(){
+        scanMode='search';
+        document.getElementById('locModal').classList.add('show');
+      },100);
+    }
+    return;
+  }
+
+  /* 검색/이동 모드 형식 검증 */
+  if(!isValidCode(code))return;
+
+  /* 이동 모드 cooldown */
+  if(scanMode==='move'){
+    var now=Date.now();
+    /* 글로벌 cooldown: 직전 인식 1초 내 모든 1D 디코드 차단 (QR은 면제 - 단일 디코더라 안전) */
+    if(!lastDecodedIsQR&&lastConfirmedTime&&now-lastConfirmedTime<1000)return;
+    /* 같은 코드 2초 cooldown (1D + QR 동일) */
+    if(code===lastConfirmedCode){
+      if(now-lastConfirmedTime<2000)return;
+      lastConfirmedCode='';
+    }
+  }
+  if(code!==lastConfirmedCode)lastConfirmedCode='';
+
+  /* QR은 즉시 확정 (CONFIRM_COUNT 면제) */
+  if(lastDecodedIsQR){
+    recentCodes=[];
+    onScanConfirmed(code);
+    return;
+  }
+
+  /* 1D 바코드: 빈도 기반 누적 (voting)
+     - 최근 5번 디코드 중 가장 자주 나온 코드를 후보로
+     - 부정확 디코드는 매번 다른 값이라 빈도 낮음 → 자연스럽게 무시됨
+     - 17자리/12자리 등 길이 무관하게 빈도 높은 코드가 우선 */
+  var v=_voteCode(code);
+  pendingCode=v.code;
+  scReadEl.textContent='✓ '+v.code+' ('+v.count+'/'+CONFIRM_COUNT+')';
+  if(v.count>=CONFIRM_COUNT){
+    recentCodes=[];pendingCode='';
+    onScanConfirmed(v.code);
+  }
+}
+
+/* 최근 디코드 결과를 voting으로 누적 → 가장 빈도 높은 코드 반환 */
+function _voteCode(code){
+  recentCodes.push(code);
+  if(recentCodes.length>5)recentCodes.shift();
+  var counts={};
+  for(var i=0;i<recentCodes.length;i++){
+    counts[recentCodes[i]]=(counts[recentCodes[i]]||0)+1;
+  }
+  var bestCode=code,bestCount=0;
+  for(var c in counts){
+    if(counts[c]>bestCount){bestCode=c;bestCount=counts[c]}
+  }
+  return {code:bestCode,count:bestCount};
+}
+
+/* 사용자가 scRead 영역을 탭하면 표시 중인 후보 코드를 즉시 확정 (CONFIRM_COUNT 미달 상태에서 수동 확정) */
+function manualConfirmCode(){
+  if(!pendingCode)return;
+  if(scanned&&scanMode==='search')return;
+  var code=pendingCode;
+  pendingCode='';
+  recentCodes=[];
+
+  /* 위치 모드 수동 확정 */
+  if(scanMode==='location'){
     if(scanned)return;
     scanned=true;
     confirmFeedback();
@@ -1503,20 +1717,8 @@ function onCodeRead(code){
     },100);
     return;
   }
-  /* 형식 검증 (오인식 방지, 모든 형식 모드에선 완화) */
-  if(!isValidCode(code))return;
-  if(scanMode==='move'){
-    /* 같은 코드는 3초 cooldown */
-    if(code===lastConfirmedCode){
-      var now=Date.now();
-      if(now-lastConfirmedTime<3000)return;
-      lastConfirmedCode=''; /* cooldown 지나면 해제 */
-    }
-  }
-  if(code!==lastConfirmedCode)lastConfirmedCode='';
-  if(code===lastCode)matchCount++;else{lastCode=code;matchCount=1}
-  scReadEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
-  if(matchCount>=CONFIRM_COUNT)onScanConfirmed(code);
+  /* 검색/이동 수동 확정 */
+  onScanConfirmed(code);
 }
 
 function openLocScanner(){
@@ -1536,7 +1738,7 @@ function onScanConfirmed(code){
     /* 스캔 리셋 — 다른 바코드 스캔 가능, 같은 바코드는 3초 cooldown 후 재스캔 가능 */
     lastConfirmedCode=code;
     lastConfirmedTime=Date.now();
-    scanned=false;matchCount=0;scReadEl.textContent='';
+    scanned=false;matchCount=0;recentCodes=[];pendingCode='';scReadEl.textContent='';
     return;
   }
 
@@ -1545,46 +1747,572 @@ function onScanConfirmed(code){
   confirmFeedback();closeScanner();
   qEl.value=code;doSearch();
 }
+/* ══════════════════════════════════════
+   스캐너 (html5-qrcode 통합)
+   ══════════════════════════════════════ */
 
-/* ── Android ── */
-function initAndroidScanner(){
-  document.getElementById('iosScanner').style.display='none';
-  document.getElementById('androidCam').style.display='flex';
+var html5Scanner=null;
+var html5Cameras=[]; /* {id,label} 형식 */
+
+function startWatchdog(){
+  stopWatchdog();
+  watchdogTimer=setInterval(function(){
+    var idle=Date.now()-lastDecodeTime;
+    /* 1.5초 이상 디코드 콜백 없음 = 가이드 이탈
+       voting/matchCount 누적 리셋 → 다시 들어왔을 때 fresh start */
+    if(idle>1500&&recentCodes.length>0){
+      recentCodes=[];pendingCode='';
+      matchCount=0;lastCode='';
+      if(scReadEl)scReadEl.textContent='';
+    }
+    /* 이동모드: 3초 cooldown 자동 해제 */
+    if(scanMode==='move'&&lastConfirmedCode&&Date.now()-lastConfirmedTime>2000){
+      lastConfirmedCode='';
+    }
+  },500);
+}
+
+function stopWatchdog(){
+  if(watchdogTimer){clearInterval(watchdogTimer);watchdogTimer=null}
+}
+
+function startScanner(){
+  /* iOS 분기: ZXing 인식률 한계로 v1 (QuaggaJS + jsQR) 사용 */
+  if(isIOS){
+    initIOSScanner();
+    startWatchdog();
+    return;
+  }
+  /* Android: html5-qrcode (BarcodeDetector 우선) */
+  if(typeof Html5Qrcode==='undefined'){
+    setTimeout(startScanner,300);return;
+  }
   document.getElementById('scanGuide').style.display='flex';
-  scanVideo=document.getElementById('scanVideo');cropCanvas=document.getElementById('cropCanvas');cropCtx=cropCanvas.getContext('2d');
-  if(!nativeDetector)nativeDetector=new BarcodeDetector({formats:['code_128','code_39','ean_13','ean_8','upc_a','upc_e','itf','code_93','codabar','qr_code']});
-  var savedId='';try{savedId=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
-  var c=savedId?{video:{deviceId:{exact:savedId}},audio:false}:{video:{facingMode:'environment'},audio:false};
-  navigator.mediaDevices.getUserMedia(c)
-  .catch(function(){return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})})
-  .then(function(stream){scanVideo.srcObject=stream;activeTrack=stream.getVideoTracks()[0];
-    var s=activeTrack.getSettings?activeTrack.getSettings():{};
-    scCamInfoEl.textContent=(activeTrack.label||'카메라')+' ('+(s.width||'?')+'x'+(s.height||'?')+')';
-    return scanVideo.play()}).then(function(){startAndroidScan();return discoverCameras()})
-  .catch(function(){scCamInfoEl.textContent='카메라 권한 확인'});
-}
-function startAndroidCam(idx){stopAndroid();var cam=allCameras[idx];if(!cam)return;
-  navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:cam.deviceId}},audio:false})
-  .catch(function(){return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false})})
-  .then(function(stream){scanVideo.srcObject=stream;activeTrack=stream.getVideoTracks()[0];
-    var s=activeTrack.getSettings?activeTrack.getSettings():{};
-    scCamInfoEl.textContent=(activeTrack.label||'카메라 '+(idx+1))+' ('+(s.width||'?')+'x'+(s.height||'?')+')';
-    try{localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}
-    return scanVideo.play()}).then(function(){startAndroidScan()});
-}
-function startAndroidScan(){if(scanTimer)clearInterval(scanTimer);
-  scanTimer=setInterval(function(){if((scanned&&scanMode==='search')||scanVideo.readyState<2)return;
-    var vw=scanVideo.videoWidth,vh=scanVideo.videoHeight;if(!vw||!vh)return;
-    var gw=vw*.9,gh=gw/1.8,gx=(vw-gw)/2,gy=(vh-gh)/2;
-    cropCanvas.width=gw;cropCanvas.height=gh;cropCtx.drawImage(scanVideo,gx,gy,gw,gh,0,0,gw,gh);
-    nativeDetector.detect(cropCanvas).then(function(r){if(r.length>0){emptyFrames=0;onCodeRead(r[0].rawValue)}
-      else{emptyFrames++;if(emptyFrames>=EMPTY_THRESHOLD&&(matchCount>0||lastConfirmedCode)){matchCount=0;lastCode='';lastConfirmedCode='';scReadEl.textContent='';emptyFrames=0}}}).catch(function(){});
-  },100);
-}
-function stopAndroid(){if(scanTimer){clearInterval(scanTimer);scanTimer=null}
-  if(scanVideo&&scanVideo.srcObject){scanVideo.srcObject.getTracks().forEach(function(t){t.stop()});scanVideo.srcObject=null}activeTrack=null}
+  document.getElementById('html5Reader').style.display='block';
+  document.getElementById('iosScanner').style.display='none';
 
-/* ── iOS: QuaggaJS ── */
+  /* 이전 인스턴스 정리 */
+  if(html5Scanner){
+    try{html5Scanner.stop().catch(function(){})}catch(e){}
+    html5Scanner=null;
+  }
+  startWatchdog();
+
+  /* 사용자 명시 카메라 전환은 sessionStorage로만 유지 (탭 닫으면 정리)
+     → 새 세션에서는 항상 라벨 기반으로 메인 카메라 자동 식별 */
+  var sessionId='';
+  try{sessionId=sessionStorage.getItem('SCAN_CAM_ID_SESSION')||''}catch(e){}
+  var sessionLabel='';
+  try{sessionLabel=sessionStorage.getItem('SCAN_CAM_LABEL_SESSION')||''}catch(e){}
+  /* 이전 세션의 메인 카메라 (다음 세션 첫 시도 - 라벨 안정적이면 즉시 메인) */
+  var prevId='';
+  try{prevId=localStorage.getItem('SCAN_CAM_PREV_ID')||''}catch(e){}
+  var prevLabel='';
+  try{prevLabel=localStorage.getItem('SCAN_CAM_PREV_LABEL')||''}catch(e){}
+
+  if(!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices){
+    _startWithFacingMode();return;
+  }
+
+  navigator.mediaDevices.enumerateDevices().then(function(devs){
+    var backCams=devs.filter(function(d){
+      if(d.kind!=='videoinput')return false;
+      var l=(d.label||'').toLowerCase();
+      return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0;
+    });
+    if(!backCams.length)backCams=devs.filter(function(d){return d.kind==='videoinput'});
+
+    /* 라벨이 비어있으면 권한 없음 → facingMode로 권한 획득 (그 후 _captureActiveTrack에서 처리) */
+    var hasLabels=backCams.length>0&&backCams.some(function(d){return d.label});
+    if(!hasLabels){
+      console.log('[scanner] no permission yet, starting facingMode');
+      _startWithFacingMode();return;
+    }
+
+    /* 권한 있음 → 카메라 목록 채움 */
+    html5Cameras=backCams.map(function(d){return{id:d.deviceId,label:d.label||'카메라'}});
+    allCameras=backCams.map(function(d){return{deviceId:d.deviceId,label:d.label||'카메라'}});
+    console.log('[scanner] enumerated '+html5Cameras.length+' cameras');
+
+    /* 1순위: 같은 세션 내 사용자 선택 (sessionStorage) - deviceId 우선 */
+    if(sessionId){
+      for(var i=0;i<html5Cameras.length;i++){
+        if(html5Cameras[i].id===sessionId){
+          currentCamIndex=i;
+          console.log('[scanner] session matched by deviceId:',html5Cameras[i].label);
+          _startWithCamera(i);return;
+        }
+      }
+    }
+    /* 2순위: 같은 세션 내 사용자 선택 (sessionStorage) - label fallback */
+    if(sessionLabel){
+      for(var i=0;i<html5Cameras.length;i++){
+        if(html5Cameras[i].label===sessionLabel){
+          currentCamIndex=i;
+          try{sessionStorage.setItem('SCAN_CAM_ID_SESSION',html5Cameras[i].id)}catch(e){}
+          console.log('[scanner] session matched by label:',html5Cameras[i].label);
+          _startWithCamera(i);return;
+        }
+      }
+    }
+
+    /* 3순위: 이전 세션 메인 카메라 (localStorage prev) - label 우선 (deviceId는 변경 가능)
+       → 새 세션에서 즉시 메인 카메라로 시작 (라벨 안정적이면) */
+    if(prevLabel){
+      for(var i=0;i<html5Cameras.length;i++){
+        if(html5Cameras[i].label===prevLabel){
+          currentCamIndex=i;
+          try{localStorage.setItem('SCAN_CAM_PREV_ID',html5Cameras[i].id)}catch(e){}
+          console.log('[scanner] prev session main cam matched by label:',html5Cameras[i].label);
+          _startWithCamera(i);return;
+        }
+      }
+    }
+    if(prevId){
+      for(var i=0;i<html5Cameras.length;i++){
+        if(html5Cameras[i].id===prevId){
+          currentCamIndex=i;
+          console.log('[scanner] prev session main cam matched by deviceId:',html5Cameras[i].label);
+          _startWithCamera(i);return;
+        }
+      }
+    }
+
+    /* 4순위 (기본): 라벨 기반 메인 카메라 자동 식별
+       (silent test는 갤럭시에서 카메라 락 충돌로 화면 먹통 발생 → 일시 비활성화) */
+    var mainIdx=_pickMainCameraIndex(html5Cameras);
+    currentCamIndex=mainIdx;
+    console.log('[scanner] picked main by label:',html5Cameras[mainIdx].label);
+    _startWithCamera(mainIdx);
+  }).catch(function(e){
+    console.warn('enumerateDevices fail:',e);
+    _startWithFacingMode();
+  });
+}
+
+function _buildScanner(){
+  return new Html5Qrcode('html5Reader',{
+    verbose:false,
+    formatsToSupport:getActiveFormats(),
+    useBarCodeDetectorIfSupported:true
+  });
+}
+
+function _scanConfig(useCamId){
+  var cfg={
+    fps:15,
+    qrbox:function(vw,vh){
+      /* 가이드 박스와 동일: 화면 96% 너비, 2:1 비율 */
+      var w=Math.floor(Math.min(vw,vh*2)*0.96);
+      var h=Math.floor(w/2);
+      return {width:w,height:h};
+    },
+    aspectRatio:1.7777,
+    disableFlip:true
+  };
+  if(!useCamId){
+    /* facingMode일 때만 videoConstraints 사용. deviceId 사용 시에는
+       _startWithCamera의 start 첫 인자에 MediaTrackConstraints 객체를 직접 넘겨
+       deviceId+해상도를 한 번에 처리 (videoConstraints에 deviceId 없으면 전면 카메라 잡히는 문제 회피) */
+    cfg.videoConstraints={
+      facingMode:'environment',
+      width:{ideal:1920},
+      height:{ideal:1080}
+    };
+  }
+  return cfg;
+}
+
+function _startWithCamera(idx){
+  var cam=html5Cameras[idx];if(!cam)return;
+  html5Scanner=_buildScanner();
+  /* string deviceId를 첫 인자에 넘김 (호환성 우선)
+     해상도는 _captureActiveTrack에서 applyConstraints로 후처리 */
+  html5Scanner.start(cam.id,_scanConfig(true),onCodeDecoded,onCodeDecodeFail)
+    .then(function(){
+      scCamInfoEl.textContent=cam.label||'카메라 '+(idx+1);
+      try{localStorage.setItem('SCAN_CAM_ID',cam.id)}catch(e){}
+      _captureActiveTrack();
+    })
+    .catch(function(err){
+      console.error('camera start fail:',err);
+      /* fail 이유를 화면에 표시 (진단용) */
+      scCamInfoEl.textContent='start fail: '+(err.name||'')+' '+(err.message||'').slice(0,40);
+      _startWithFacingMode();
+    });
+}
+
+function _startWithFacingMode(){
+  html5Scanner=_buildScanner();
+  html5Scanner.start({facingMode:'environment'},_scanConfig(false),onCodeDecoded,onCodeDecodeFail)
+    .then(function(){
+      scCamInfoEl.textContent='후면 카메라';
+      _captureActiveTrack();
+    })
+    .catch(function(err){
+      console.error('camera start fail:',err);
+      scCamInfoEl.textContent='카메라 권한 확인';
+    });
+}
+
+/* 메인 카메라 식별: 다중 휴리스틱 기반
+   1순위: 라벨 키워드(wide/tele/ultra/광각/망원) 없는 카메라 우선
+   2순위: 라벨에서 숫자 추출 후 가장 작은 N (보통 메인이 0번) */
+function _pickMainCameraIndex(cams){
+  if(!cams||!cams.length)return 0;
+  /* 라벨 키워드 분석 + 숫자 추출 */
+  var scored=[];
+  for(var i=0;i<cams.length;i++){
+    var label=((cams[i].label||cams[i].id||'')+'').toLowerCase();
+    var hasWideKeyword=label.indexOf('wide')>=0||label.indexOf('ultra')>=0||label.indexOf('광각')>=0;
+    var hasTeleKeyword=label.indexOf('tele')>=0||label.indexOf('telephoto')>=0||label.indexOf('망원')>=0;
+    /* 라벨에서 숫자 추출 (예: "camera 0" → 0, "camera 2" → 2) */
+    var numMatch=label.match(/\d+/);
+    var camNum=numMatch?parseInt(numMatch[0]):999;
+    scored.push({
+      idx:i,
+      isExcluded:hasWideKeyword||hasTeleKeyword,
+      camNum:camNum
+    });
+  }
+  /* 메인 후보: 키워드 없음 + 가장 작은 숫자 */
+  var candidates=scored.filter(function(s){return !s.isExcluded});
+  if(candidates.length===0)candidates=scored;
+  candidates.sort(function(a,b){return a.camNum-b.camNum});
+  return candidates[0].idx;
+}
+
+/* 모든 후면 카메라를 차례로 짧게 열어 capability 검사 → 진짜 메인 카메라 deviceId 반환
+   (갤럭시 Chrome이 광각에 디지털 줌 적용해 caps.zoom.min=1.0으로 보고하는 환경 대응)
+   판정 기준 (우선순위):
+   1. 라벨에 wide/tele/ultra/광각/망원 키워드 있으면 제외
+   2. caps.zoom.min < 0.99 (광각) 또는 > 1.01 (망원) 제외
+   3. 남은 카메라 중 caps.width.max 가장 큰 카메라 = 메인
+   결과는 callback으로 전달, 실패하면 null */
+function _detectMainCameraSilent(callback){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!navigator.mediaDevices.enumerateDevices){
+    callback(null);return;
+  }
+  navigator.mediaDevices.enumerateDevices().then(function(devs){
+    var backCams=devs.filter(function(d){
+      if(d.kind!=='videoinput')return false;
+      var l=(d.label||'').toLowerCase();
+      return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0;
+    });
+    if(!backCams.length)backCams=devs.filter(function(d){return d.kind==='videoinput'});
+    if(!backCams.length){callback(null);return}
+    if(backCams.length===1){
+      callback({deviceId:backCams[0].deviceId,label:backCams[0].label,allCams:backCams});return;
+    }
+
+    var results=[];
+    var idx=0;
+    function testNext(){
+      if(idx>=backCams.length){
+        /* 모든 카메라 검사 완료 → 메인 식별 */
+        var mainCandidate=null;
+        for(var i=0;i<results.length;i++){
+          var r=results[i];
+          if(r.isWide||r.isTele)continue;
+          if(!mainCandidate||r.maxWidth>mainCandidate.maxWidth){
+            mainCandidate=r;
+          }
+        }
+        /* 메인 후보 못 찾으면 라벨 기반 fallback */
+        if(!mainCandidate){
+          var fallbackIdx=_pickMainCameraIndex(backCams);
+          mainCandidate={deviceId:backCams[fallbackIdx].deviceId,label:backCams[fallbackIdx].label};
+        }
+        console.log('[scanner] silent test main:',mainCandidate.label,'maxW:',mainCandidate.maxWidth);
+        callback({deviceId:mainCandidate.deviceId,label:mainCandidate.label,allCams:backCams});
+        return;
+      }
+      var cam=backCams[idx];
+      var labelLower=(cam.label||'').toLowerCase();
+      var isWideByLabel=labelLower.indexOf('wide')>=0||labelLower.indexOf('ultra')>=0||labelLower.indexOf('광각')>=0;
+      var isTeleByLabel=labelLower.indexOf('tele')>=0||labelLower.indexOf('망원')>=0;
+      navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:cam.deviceId}}}).then(function(stream){
+        var track=stream.getVideoTracks()[0];
+        var caps=track.getCapabilities?track.getCapabilities():{};
+        var zoomMin=(caps.zoom&&typeof caps.zoom.min==='number')?caps.zoom.min:1.0;
+        var maxWidth=(caps.width&&caps.width.max)?caps.width.max:0;
+        var isWide=isWideByLabel||zoomMin<0.99;
+        var isTele=isTeleByLabel||zoomMin>1.01;
+        results.push({
+          deviceId:cam.deviceId,label:cam.label,
+          isWide:isWide,isTele:isTele,maxWidth:maxWidth,zoomMin:zoomMin
+        });
+        console.log('[scanner] cam test:',cam.label,'zoom.min:',zoomMin,'maxW:',maxWidth,'wide:',isWide,'tele:',isTele);
+        try{stream.getTracks().forEach(function(t){t.stop()})}catch(e){}
+        idx++;
+        /* 갤럭시 카메라 빠른 stop/start 충돌 방지를 위해 약간 대기 */
+        setTimeout(testNext,100);
+      }).catch(function(e){
+        console.warn('[scanner] cam test fail:',cam.label,e);
+        results.push({
+          deviceId:cam.deviceId,label:cam.label,
+          isWide:isWideByLabel,isTele:isTeleByLabel,maxWidth:0,zoomMin:1.0
+        });
+        idx++;
+        setTimeout(testNext,100);
+      });
+    }
+    testNext();
+  }).catch(function(e){
+    console.warn('enumerateDevices fail in silent test:',e);
+    callback(null);
+  });
+}
+
+/* 진단 패널: ?debug URL에서 활성화. 활성 카메라 + 모든 후면 카메라 정보를 화면에 표시
+   사용자가 스크린샷 하나로 모든 정보 전달 가능하게 */
+function _showDiagPanel(activeTrack,caps,s,trackLabel){
+  var panel=document.getElementById('diagPanel');
+  if(!panel){
+    panel=document.createElement('div');
+    panel.id='diagPanel';
+    panel.style.cssText='position:fixed;top:60px;left:8px;right:8px;z-index:99999;background:rgba(0,0,0,.92);color:#0f0;font:11px/1.4 monospace;padding:10px;border:1px solid #0f0;border-radius:6px;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-all';
+    document.body.appendChild(panel);
+    var closeBtn=document.createElement('button');
+    closeBtn.textContent='✕';
+    closeBtn.style.cssText='position:absolute;top:4px;right:6px;background:#f00;color:#fff;border:0;width:24px;height:24px;border-radius:4px;font-weight:bold';
+    closeBtn.onclick=function(){panel.style.display='none'};
+    panel.appendChild(closeBtn);
+  }
+  panel.style.display='block';
+
+  /* 활성 카메라 상세 정보 */
+  var activeInfo='=== ACTIVE CAMERA ===\n';
+  activeInfo+='label: '+trackLabel+'\n';
+  activeInfo+='resolution: '+s.width+'x'+s.height+'\n';
+  activeInfo+='deviceId: '+(s.deviceId||'(empty)')+'\n';
+  if(caps.zoom){
+    activeInfo+='zoom: min='+caps.zoom.min+' max='+caps.zoom.max+' step='+caps.zoom.step+'\n';
+  }else{
+    activeInfo+='zoom: NOT SUPPORTED\n';
+  }
+  if(caps.width){
+    activeInfo+='width: min='+caps.width.min+' max='+caps.width.max+'\n';
+  }
+  if(caps.height){
+    activeInfo+='height: min='+caps.height.min+' max='+caps.height.max+'\n';
+  }
+  if(caps.facingMode){
+    activeInfo+='facingMode: '+JSON.stringify(caps.facingMode)+'\n';
+  }
+  activeInfo+='currentZoom: '+(s.zoom||'?')+'\n';
+
+  /* localStorage 테스트 + 저장된 값 */
+  activeInfo+='\n=== STORAGE ===\n';
+  try{
+    var tk='_t_'+Date.now();
+    localStorage.setItem(tk,'1');
+    activeInfo+='localStorage: '+(localStorage.getItem(tk)==='1'?'OK':'FAIL')+'\n';
+    localStorage.removeItem(tk);
+  }catch(e){activeInfo+='localStorage: BLOCKED ('+e.message+')\n'}
+  try{activeInfo+='PREV_ID: '+(localStorage.getItem('SCAN_CAM_PREV_ID')||'(empty)').slice(0,40)+'\n'}catch(e){}
+  try{activeInfo+='PREV_LABEL: '+(localStorage.getItem('SCAN_CAM_PREV_LABEL')||'(empty)')+'\n'}catch(e){}
+  try{activeInfo+='SESSION_ID: '+(sessionStorage.getItem('SCAN_CAM_ID_SESSION')||'(empty)').slice(0,40)+'\n'}catch(e){}
+  try{activeInfo+='SESSION_LABEL: '+(sessionStorage.getItem('SCAN_CAM_LABEL_SESSION')||'(empty)')+'\n'}catch(e){}
+
+  /* 모든 후면 카메라 목록 */
+  activeInfo+='\n=== ALL BACK CAMERAS ('+(html5Cameras?html5Cameras.length:0)+') ===\n';
+  if(html5Cameras&&html5Cameras.length){
+    for(var i=0;i<html5Cameras.length;i++){
+      var marker=(html5Cameras[i].id===s.deviceId)?'>>> ':'    ';
+      activeInfo+=marker+'['+i+'] '+html5Cameras[i].label+'\n';
+    }
+  }
+  activeInfo+='\n(✕ to close. Screenshot this!)';
+
+  /* 첫 자식(닫기 버튼) 빼고 텍스트 갱신 */
+  var textNode=panel.firstChild;
+  if(textNode&&textNode.nodeType===3){panel.removeChild(textNode)}
+  panel.insertBefore(document.createTextNode(activeInfo),panel.firstChild);
+}
+
+function _captureActiveTrack(){
+  setTimeout(function(){
+    try{
+      var v=document.querySelector('#html5Reader video');
+      if(!v||!v.srcObject)return;
+      activeTrack=v.srcObject.getVideoTracks()[0];
+      var caps=activeTrack.getCapabilities?activeTrack.getCapabilities():{};
+      var s=activeTrack.getSettings?activeTrack.getSettings():{};
+      var trackLabel=activeTrack.label||'';
+      console.log('[scanner] resolution:',s.width+'x'+s.height,'caps.zoom:',caps.zoom,'label:',trackLabel);
+
+      /* 진단용: 활성 카메라 정보를 화면에 영구 표시 (사용자가 어떤 카메라가 잡혔는지 직접 확인 가능) */
+      var diagInfo='📷 '+(trackLabel||'?')+' | '+s.width+'x'+s.height;
+      if(caps.zoom&&typeof caps.zoom.min==='number'){
+        diagInfo+=' | zoom:'+caps.zoom.min+'~'+(caps.zoom.max||'?');
+      }
+      if(caps.width&&caps.width.max){
+        diagInfo+=' | maxW:'+caps.width.max;
+      }
+      scCamInfoEl.textContent=diagInfo;
+
+      /* 진단 모드: URL에 ?debug 있으면 모든 카메라 정보를 화면에 패널로 표시 */
+      if(location.search.indexOf('debug')>=0||location.hash.indexOf('debug')>=0){
+        _showDiagPanel(activeTrack,caps,s,trackLabel);
+      }
+
+      /* localStorage 테스트 - 한 번만 */
+      if(!window._lsTestDone){
+        window._lsTestDone=true;
+        try{
+          var k='SCAN_LS_TEST_'+Date.now();
+          localStorage.setItem(k,'ok');
+          var r=localStorage.getItem(k);
+          localStorage.removeItem(k);
+          console.log('[scanner] localStorage test:',r==='ok'?'OK':'FAIL');
+        }catch(e){console.log('[scanner] localStorage exception:',e.message)}
+      }
+
+      /* zoom + focus는 advanced (best-effort), 안전하게 try/catch */
+      var advConstraint={};
+      if(caps.zoom&&typeof caps.zoom.min==='number'){
+        advConstraint.zoom=Math.max(caps.zoom.min,Math.min(1.0,caps.zoom.max||1.0));
+      }
+      if(caps.focusMode&&caps.focusMode.indexOf&&caps.focusMode.indexOf('continuous')>=0){
+        advConstraint.focusMode='continuous';
+      }
+      if(Object.keys(advConstraint).length>0){
+        try{activeTrack.applyConstraints({advanced:[advConstraint]});}catch(e){}
+      }
+      /* 해상도 적용을 setTimeout으로 미뤄서 stream 안정화 후 시도
+         (즉시 applyConstraints가 stream을 깨뜨리는 갤럭시 Chrome 동작 회피)
+         600ms - 1500ms에서 단축. stream 안정화에 필요한 최소 시간 */
+      if(caps.width&&caps.width.max&&caps.width.max>=1280){
+        var targetW=Math.min(1920,caps.width.max);
+        var targetH=Math.min(1080,caps.height?caps.height.max:1080);
+        setTimeout(function(){
+          try{
+            activeTrack.applyConstraints({
+              width:{ideal:targetW},
+              height:{ideal:targetH}
+            }).then(function(){
+              var ns=activeTrack.getSettings?activeTrack.getSettings():null;
+              if(ns)console.log('[scanner] resolution after apply:',ns.width+'x'+ns.height);
+            }).catch(function(e){
+              console.warn('[scanner] resolution apply failed:',e.name||'',e.message||'');
+            });
+          }catch(e){console.warn('apply exception:',e)}
+        },600);
+      }
+
+      /* enumerateDevices 결과로 카메라 목록 채움 + 광각/망원 회피 + deviceId 저장
+         (회피 로직을 enumerateDevices 완료 후에 실행해 html5Cameras가 비어있는 채로 회피 실패하는 문제 방지) */
+      if(!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices){
+        try{sessionStorage.removeItem('SCAN_CAM_TRY')}catch(e){}
+        return;
+      }
+      navigator.mediaDevices.enumerateDevices().then(function(devs){
+        var backCams=devs.filter(function(d){
+          if(d.kind!=='videoinput')return false;
+          var l=(d.label||'').toLowerCase();
+          return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0;
+        });
+        if(!backCams.length)backCams=devs.filter(function(d){return d.kind==='videoinput'});
+        html5Cameras=backCams.map(function(d){return{id:d.deviceId,label:d.label||'카메라'}});
+        allCameras=backCams.map(function(d){return{deviceId:d.deviceId,label:d.label||'카메라'}});
+        console.log('[scanner] cameras enumerated:',allCameras.length);
+
+        /* 라벨로 활성 카메라 매칭해 정확한 deviceId 찾기 (settings.deviceId가 빈 경우 대비) */
+        var activeDeviceId=s.deviceId||'';
+        if(!activeDeviceId&&trackLabel){
+          for(var i=0;i<backCams.length;i++){
+            if(backCams[i].label===trackLabel){activeDeviceId=backCams[i].deviceId;break}
+          }
+        }
+
+        /* 활성 카메라 인덱스 정확히 식별 (facingMode로 시작한 경우에도) */
+        var activeIdx=-1;
+        if(activeDeviceId){
+          for(var i=0;i<html5Cameras.length;i++){
+            if(html5Cameras[i].id===activeDeviceId){activeIdx=i;break}
+          }
+        }
+        if(activeIdx<0&&trackLabel){
+          for(var i=0;i<html5Cameras.length;i++){
+            if(html5Cameras[i].label===trackLabel){activeIdx=i;break}
+          }
+        }
+        if(activeIdx<0)activeIdx=currentCamIndex;
+
+        /* 광각/망원 회피 (zoom.min 기반) */
+        var isWide=caps.zoom&&typeof caps.zoom.min==='number'&&caps.zoom.min<0.99;
+        var isTele=caps.zoom&&typeof caps.zoom.min==='number'&&caps.zoom.min>1.01;
+
+        /* 라벨 기반 추가 회피: 활성 카메라 라벨에 wide/tele 키워드 → 메인 아님 */
+        if(!isWide&&!isTele&&trackLabel){
+          var ll=trackLabel.toLowerCase();
+          if(ll.indexOf('wide')>=0||ll.indexOf('ultra')>=0||ll.indexOf('광각')>=0)isWide=true;
+          else if(ll.indexOf('tele')>=0||ll.indexOf('망원')>=0)isTele=true;
+        }
+
+        if((isWide||isTele)&&html5Cameras.length>1){
+          var tries=0;
+          try{tries=parseInt(sessionStorage.getItem('SCAN_CAM_TRY')||'0')}catch(e){}
+          if(tries<html5Cameras.length-1){
+            try{sessionStorage.setItem('SCAN_CAM_TRY',(tries+1).toString())}catch(e){}
+            /* _pickMainCameraIndex 의존 제거: 활성 카메라 인덱스에서 +1 순차 시도
+               (라벨이 wide/tele 키워드 없는 갤럭시 환경에서 무한 같은 카메라 잡히는 문제 회피) */
+            var nextIdx=(activeIdx+1)%html5Cameras.length;
+            console.log('[scanner] '+(isWide?'wide':'tele')+' detected at idx '+activeIdx+' ('+(html5Cameras[activeIdx]?html5Cameras[activeIdx].label:'?')+'), trying next idx '+nextIdx+' ('+html5Cameras[nextIdx].label+') tries='+(tries+1)+'/'+(html5Cameras.length-1));
+            currentCamIndex=nextIdx;
+            try{sessionStorage.setItem('SCAN_CAM_ID_SESSION',html5Cameras[nextIdx].id)}catch(e){}
+            try{sessionStorage.setItem('SCAN_CAM_LABEL_SESSION',html5Cameras[nextIdx].label||'')}catch(e){}
+            restartScanner();
+            return;
+          }
+        }
+
+        /* 메인 카메라 잡힘 → 시도 카운터 리셋 + sessionStorage + localStorage prev 저장
+           (localStorage prev: 다음 세션 첫 시도용. 라벨 매칭 안정적이면 즉시 메인 시작 가능) */
+        try{sessionStorage.removeItem('SCAN_CAM_TRY')}catch(e){}
+        if(activeDeviceId){
+          try{sessionStorage.setItem('SCAN_CAM_ID_SESSION',activeDeviceId)}catch(e){}
+          if(trackLabel){try{sessionStorage.setItem('SCAN_CAM_LABEL_SESSION',trackLabel)}catch(e){}}
+          try{localStorage.setItem('SCAN_CAM_PREV_ID',activeDeviceId)}catch(e){}
+          if(trackLabel){try{localStorage.setItem('SCAN_CAM_PREV_LABEL',trackLabel)}catch(e){}}
+          console.log('[scanner] main cam locked - id:',activeDeviceId,'label:',trackLabel);
+        }
+      }).catch(function(e){
+        console.warn('enumerateDevices fail:',e);
+        try{sessionStorage.removeItem('SCAN_CAM_TRY')}catch(e){}
+      });
+    }catch(e){}
+  },500);
+}
+
+function stopScanner(){
+  stopWatchdog();
+  /* iOS: QuaggaJS + jsQR 정지 (또는 QR-only 정지) */
+  if(isIOS){
+    /* Quagga가 init되어 있으면 stop, QR-only면 별도 정지 */
+    try{Quagga.stop()}catch(e){}
+    stopIOSQROnly();
+    activeTrack=null;
+    return;
+  }
+  /* Android: html5-qrcode 정지 */
+  if(!html5Scanner){activeTrack=null;return}
+  var s=html5Scanner;
+  html5Scanner=null;
+  try{
+    s.stop().then(function(){try{s.clear()}catch(e){}})
+      .catch(function(){try{s.clear()}catch(e){}});
+  }catch(e){}
+  activeTrack=null;
+}
+
+function restartScanner(){
+  stopScanner();
+  setTimeout(startScanner,300);
+}
+
+/* ── iOS: QuaggaJS + jsQR ── */
 var iosQrTimer=null;
 var iosQrCanvas=null;
 
@@ -1597,86 +2325,227 @@ function startIOSQrScan(){
     if(!vid||vid.readyState<2)return;
     var w=vid.videoWidth,h=vid.videoHeight;
     if(!w||!h)return;
+    /* 비디오 전체에서 디코드 (cropping이 화면/비디오 비율 차이로 가이드 박스를 벗어나는 문제 회피) */
     iosQrCanvas.width=w;iosQrCanvas.height=h;
-    var ctx=iosQrCanvas.getContext('2d');
+    var ctx=iosQrCanvas.getContext('2d',{willReadFrequently:true});
     ctx.drawImage(vid,0,0,w,h);
     var imgData=ctx.getImageData(0,0,w,h);
     var qr=jsQR(imgData.data,w,h,{inversionAttempts:'dontInvert'});
     if(qr&&qr.data){
-      /* QR location을 검증해 진짜 QR인지 확인 (가짜 QR 차단) */
       if(!qr.location||!qr.location.topLeftCorner)return;
-      /* QR 모서리 4점이 충분히 떨어져 있어야 진짜 QR */
       var loc=qr.location;
       var dx=loc.topRightCorner.x-loc.topLeftCorner.x;
       var dy=loc.bottomLeftCorner.y-loc.topLeftCorner.y;
       var qrSize=Math.min(Math.abs(dx),Math.abs(dy));
-      if(qrSize<60)return; /* 너무 작은 QR은 오인식 가능성 */
-
-      var dbg='[jsQR] '+qr.data.substring(0,30)+' len:'+qr.data.length+' size:'+Math.round(qrSize);
-      console.log(dbg);
-      scCamInfoEl.textContent=dbg;
-      /* QR은 명백한 인식이므로 즉시 확정 (CONFIRM_COUNT 우회) */
-      if(scanMode==='move'){
-        if(qr.data===lastConfirmedCode&&Date.now()-lastConfirmedTime<3000)return;
-        lastConfirmedCode='';
-      }
-      lastCode=qr.data;matchCount=CONFIRM_COUNT;
-      onScanConfirmed(qr.data);
+      if(qrSize<60)return;
+      /* QR 중심이 가이드 박스 영역 안인지 검증 (object-fit:cover 보정 포함) */
+      var qrCx=(loc.topLeftCorner.x+loc.bottomRightCorner.x)/2;
+      var qrCy=(loc.topLeftCorner.y+loc.bottomRightCorner.y)/2;
+      /* 화면 중앙 60% × 60% 영역(가이드 박스 영역 약간 여유) */
+      var marginX=w*0.05,marginY=h*0.20;
+      if(qrCx<marginX||qrCx>w-marginX||qrCy<marginY||qrCy>h-marginY)return;
+      lastJsQRTime=Date.now();
+      lastDecodedIsQR=true;
+      onCodeRead(qr.data);
     }
-  },250);
+  },100);
 }
 
 function stopIOSQrScan(){
   if(iosQrTimer){clearInterval(iosQrTimer);iosQrTimer=null}
 }
 
-function initIOSScanner(){
-  document.getElementById('androidCam').style.display='none';document.getElementById('iosScanner').style.display='block';
-  Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
-    constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
-    decoder:{readers:getActiveReaders()},
-    locate:true,frequency:10,numOfWorkers:0
-  },function(err){if(err){scCamInfoEl.textContent='카메라 실패';return}
-    Quagga.start();scCamInfoEl.textContent='iOS — QuaggaJS + QR';
-    try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+function initIOSQROnly(){
+  /* 이전 Quagga 인스턴스 정리 (1D 콜백 잔존 방지) */
+  try{Quagga.stop()}catch(e){}
+  try{Quagga.offDetected()}catch(e){}
+  try{Quagga.offProcessed()}catch(e){}
+
+  /* QR 전용 모드: getUserMedia로 video 직접 만들고 jsQR만 작동 */
+  var container=document.getElementById('iosScanner');
+  /* 기존 비디오 제거 후 새로 생성 */
+  container.innerHTML='';
+  var video=document.createElement('video');
+  video.setAttribute('playsinline','true');
+  video.setAttribute('autoplay','true');
+  video.muted=true;
+  video.style.cssText='width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0';
+  container.appendChild(video);
+
+  navigator.mediaDevices.getUserMedia({
+    video:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}},
+    audio:false
+  })
+  .catch(function(){
+    /* fallback: loose */
+    return navigator.mediaDevices.getUserMedia({
+      video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}},
+      audio:false
+    });
+  })
+  .then(function(stream){
+    video.srcObject=stream;
+    activeTrack=stream.getVideoTracks()[0];
+    return video.play();
+  })
+  .then(function(){
     startIOSQrScan();
-    discoverCameras()});
-  Quagga.onDetected(function(result){
-    var c=result.codeResult&&result.codeResult.code;
-    if(!c)return;
-    /* 1D 바코드는 최소 8자 이상 (가짜 짧은 결과 차단) */
-    if(c.length<8)return;
-    onCodeRead(c);
-  });
-  Quagga.onProcessed(function(result){
-    var detectedCode=result&&result.codeResult&&result.codeResult.code;
-    if(detectedCode){
-      /* 어떤 코드든 잡히면 emptyFrames 리셋 — 카메라가 진짜 비워야만 해제됨 */
-      emptyFrames=0;
-    }else{
-      emptyFrames++;
-      if(emptyFrames>=EMPTY_THRESHOLD){
-        if(matchCount>0||lastConfirmedCode){
-          matchCount=0;lastCode='';lastConfirmedCode='';scReadEl.textContent='';
-        }
-        emptyFrames=0;
-      }
-    }
+  })
+  .catch(function(err){
+    console.error('iOS QR-only camera fail:',err);
   });
 }
-function restartQuagga(idx){try{Quagga.stop()}catch(e){}stopIOSQrScan();var cam=allCameras[idx];
-  var cs=cam?{deviceId:{exact:cam.deviceId}}:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
-  setTimeout(function(){Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),constraints:cs},
+
+function stopIOSQROnly(){
+  stopIOSQrScan();
+  var v=document.querySelector('#iosScanner video');
+  if(v&&v.srcObject){
+    v.srcObject.getTracks().forEach(function(t){t.stop()});
+    v.srcObject=null;
+  }
+  activeTrack=null;
+}
+
+function getActiveReaders(){
+  if(allFormatsMode){
+    /* 위치 모드: 토글 ON이어도 reader 단순화 (여러 reader가 같은 바코드를
+       다른 코드로 디코드해 CONFIRM_COUNT 누적을 방해하는 문제 차단) */
+    if(scanMode==='location'){
+      return ['code_128_reader','ean_reader'];
+    }
+    /* ean_8/upc_e 제외 (긴 바코드 일부를 8자리로 잘못 디코드해 정확한 결과 누적 방해)
+       i2of5/codabar 제외 (오인식 빈번) */
+    return ['code_128_reader','ean_reader','code_39_reader','upc_reader'];
+  }
+  return ['code_128_reader','ean_reader'];
+}
+
+function initIOSScanner(){
+  document.getElementById('html5Reader').style.display='none';
+  document.getElementById('iosScanner').style.display='block';
+  document.getElementById('scanGuide').style.display='flex';
+
+  /* 이전 인스턴스 정리 (Quagga 자체 정리. 핸들러는 유지) */
+  try{Quagga.stop()}catch(e){}
+  stopIOSQROnly();
+  /* 컨테이너 비우기 (이전 video element 제거) */
+  document.getElementById('iosScanner').innerHTML='';
+
+  /* 위치 모드 + 토글 OFF: Quagga 비활성, jsQR만 사용 (속도/배터리 최적화) */
+  if(scanMode==='location'&&!allFormatsMode){
+    initIOSQROnly();
+    return;
+  }
+
+  Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'30%',right:'2%',left:'2%',bottom:'30%'},
+    constraints:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}}},
     decoder:{readers:getActiveReaders()},
-    locate:true,frequency:10,numOfWorkers:0},function(err){if(err){startIOSQrScan();return}Quagga.start();activeTrack=null;
-    try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject){activeTrack=v.srcObject.getVideoTracks()[0];
-      scCamInfoEl.textContent=activeTrack.label||'카메라 '+(idx+1)}}catch(e){}
+    locate:true,frequency:15,numOfWorkers:0
+  },function(err){
+    if(err){
+      console.warn('exact environment failed, retrying loose:',err);
+      /* fallback: loose environment */
+      Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'30%',right:'2%',left:'2%',bottom:'30%'},
+        constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
+        decoder:{readers:getActiveReaders()},
+        locate:true,frequency:15,numOfWorkers:0
+      },function(err2){
+        if(err2){console.error('Quagga init fail:',err2);return}
+        Quagga.start();
+        try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+        _attachQuaggaHandlers();
+        startIOSQrScan();
+      });
+      return;
+    }
+    Quagga.start();
+    try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+    _attachQuaggaHandlers();
     startIOSQrScan();
-    try{if(cam)localStorage.setItem('SCAN_CAM_ID',cam.deviceId)}catch(e){}});
-    /* 보장: 1초 후에도 jsQR이 안 돌고 있으면 강제 시작 */
+  });
+}
+
+function _attachQuaggaHandlers(){
+  /* 매번 호출되므로 기존 핸들러 정리 후 재등록 (정확히 1개 유지) */
+  try{Quagga.offDetected()}catch(e){}
+  try{Quagga.offProcessed()}catch(e){}
+  Quagga.onDetected(function(result){
+    /* jsQR이 QR을 인식한 직후 0.5초간 Quagga 결과 무시
+       (Quagga가 QR finder pattern을 1D 바코드로 잘못 디코드해서 false 카운팅하는 문제 차단) */
+    if(Date.now()-lastJsQRTime<500)return;
+    var c=result.codeResult&&result.codeResult.code;
+    if(!c)return;
+    if(c.length<12)return; /* 12자 미만 디코드는 짧은 부정확 결과 가능성 높음 */
+    lastDecodedIsQR=false;
+    onCodeRead(c);
+  });
+  /* 빈 프레임 감지 로직 제거됨:
+     Quagga는 1D 전용이라 QR 비추는 동안 매 프레임 "빈" 결과를 반환 →
+     이전엔 15 frame 누적 시 lastConfirmedCode를 풀어 QR이 즉시 중복 인식되는 버그 발생.
+     watchdog의 2초 시간 기반 cooldown 해제만 사용. */
+}
+
+function restartQuagga(){
+  /* 위치 모드 + 토글 OFF: QR-only 재시작 */
+  try{Quagga.stop()}catch(e){}
+  stopIOSQROnly();
+  /* 컨테이너 비우기 (이전 video element 제거) */
+  document.getElementById('iosScanner').innerHTML='';
+  setTimeout(function(){
+    if(scanMode==='location'&&!allFormatsMode){
+      initIOSQROnly();
+      return;
+    }
+    Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'30%',right:'2%',left:'2%',bottom:'30%'},
+      constraints:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}}},
+      decoder:{readers:getActiveReaders()},
+      locate:true,frequency:15,numOfWorkers:0},function(err){
+        if(err){
+          /* fallback: loose */
+          Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'30%',right:'2%',left:'2%',bottom:'30%'},
+            constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
+            decoder:{readers:getActiveReaders()},
+            locate:true,frequency:15,numOfWorkers:0},function(err2){
+              if(err2){startIOSQrScan();return}
+              Quagga.start();activeTrack=null;
+              try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+              _attachQuaggaHandlers();
+              startIOSQrScan();
+            });
+          return;
+        }
+        Quagga.start();activeTrack=null;
+        try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+        _attachQuaggaHandlers();
+        startIOSQrScan();
+      });
     setTimeout(function(){if(!iosQrTimer)startIOSQrScan()},1000);
   },300);
 }
+
+var lastDecodedIsQR=false;
+
+function onCodeDecoded(decodedText,decodedResult){
+  if(!decodedText)return;
+  var fmt='';
+  try{fmt=decodedResult.result.format.formatName||''}catch(e){}
+  var isQR=fmt==='QR_CODE';
+  lastDecodedIsQR=isQR;
+  /* 위치 모드는 QR이 즉시 확정 */
+  if(scanMode==='location'&&isQR){
+    onCodeRead(decodedText);
+    return;
+  }
+  /* QR은 디코더가 정확하므로 길이 검증 없음 */
+  if(!isQR){
+    if(decodedText.length<8)return; /* 1D 바코드만 8자 미만 garbage 차단 */
+  }
+  onCodeRead(decodedText);
+}
+
+function onCodeDecodeFail(){/* 매 프레임 실패는 정상 */}
+
+
 
 /* ══════════════════════════════════════
    리뷰 (상품 이동 확인)
@@ -1694,7 +2563,7 @@ function renderReviewTable(){
     '</div>';
 
   h+='<table class="rv-table"><thead><tr>'+
-    '<th style="width:30px"><input type="checkbox" checked onchange="toggleAllCb(this);updateSummary()"></th>'+
+    '<th style="width:30px"><input type="checkbox" id="rvMasterCb" checked onchange="toggleAllCb(this);updateSummary()"></th>'+
     '<th>품목코드</th><th>품목명</th><th>상품위치</th>'+
     '<th style="width:55px;text-align:center">수량</th></tr></thead><tbody>';
   for(var i=0;i<keys.length;i++){
@@ -1730,6 +2599,7 @@ function updateSummary(){
   var keys=Object.keys(moveScannedItems);
   var checkedQty=0,checkedKind=0;
   var cbs=document.querySelectorAll('.rv-cb');
+  var total=cbs.length;
   for(var c=0;c<cbs.length;c++){
     if(cbs[c].checked){
       var code=cbs[c].getAttribute('data-code');
@@ -1743,6 +2613,13 @@ function updateSummary(){
       '<span class="rv-sum-item"><span class="rv-sum-label">선택 품목</span><span class="rv-sum-val">'+checkedKind+'종</span></span>'+
       '<span class="rv-sum-divider"></span>'+
       '<span class="rv-sum-item"><span class="rv-sum-label">선택 수량</span><span class="rv-sum-val accent">'+checkedQty+'개</span></span>';
+  }
+  /* 전체체크 박스 동기화: 모두 체크면 ON, 일부만 체크면 indeterminate, 모두 해제면 OFF */
+  var master=document.getElementById('rvMasterCb');
+  if(master){
+    if(total===0||checkedKind===0){master.checked=false;master.indeterminate=false}
+    else if(checkedKind===total){master.checked=true;master.indeterminate=false}
+    else{master.checked=false;master.indeterminate=true}
   }
 }
 
@@ -1785,6 +2662,7 @@ function addManualItem(){
 function closeReview(){document.getElementById('reviewOverlay').classList.remove('show')}
 
 function toggleAllCb(master){
+  master.indeterminate=false;
   var cbs=document.querySelectorAll('.rv-cb');
   for(var i=0;i<cbs.length;i++)cbs[i].checked=master.checked;
 }
@@ -1871,7 +2749,7 @@ function doConsign(){
 
     document.getElementById('reviewOverlay').classList.remove('show');
     document.getElementById('scannerOverlay').classList.remove('show');
-    document.getElementById('resultOverlay').classList.add('show');confirmFeedback();
+    document.getElementById('resultOverlay').classList.add('show');unlockAudio();setTimeout(confirmFeedback,80);
   })
   .catch(function(err){
     document.getElementById('procOverlay').classList.remove('show');
@@ -1919,7 +2797,7 @@ window.addEventListener('popstate',function(){
     /* location 모드: 경고 없이 그냥 닫고 위치 모달 복귀 */
     if(scanMode==='location'){
       scanner.classList.remove('show');
-      if(useNative)stopAndroid();else{try{Quagga.stop()}catch(e){}stopIOSQrScan();}
+      stopScanner();
       document.getElementById('locModal').classList.add('show');
       return;
     }
@@ -1931,7 +2809,7 @@ window.addEventListener('popstate',function(){
       }
     }
     scanner.classList.remove('show');
-    if(useNative)stopAndroid();else{try{Quagga.stop()}catch(e){}}
+    stopScanner();
     if(scanFromReview){
       scanFromReview=false;
       renderReviewTable();
@@ -2018,7 +2896,7 @@ executeMove=function(){
 
     document.getElementById('reviewOverlay').classList.remove('show');
     document.getElementById('scannerOverlay').classList.remove('show');
-    document.getElementById('resultOverlay').classList.add('show');confirmFeedback();
+    document.getElementById('resultOverlay').classList.add('show');unlockAudio();setTimeout(confirmFeedback,80);
   })
   .catch(function(err){
     document.getElementById('procOverlay').classList.remove('show');
