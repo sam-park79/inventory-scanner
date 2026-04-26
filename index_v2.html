@@ -1410,11 +1410,9 @@ function openScanner(mode){
   scanMode=mode||'search';
   scanned=false;lastCode='';matchCount=0;torchOn=false;lastConfirmedCode='';emptyFrames=0;
   recentCodes=[];pendingCode=''; /* 빈도 누적 + 수동 확정 후보 리셋 */
-  /* AOS: 모달 첫 진입 시 이전 저장 카메라 정리 → 항상 facingMode 1x로 시작
-     (restartScanner는 토글 변경/카메라 전환 시 호출되므로 그 때는 정리하지 않음) */
+  /* AOS: 광각/망원 회피용 시도 카운터만 리셋. 카메라 선택(SCAN_CAM_ID)은 유지
+     (사용자가 한 번 메인 카메라가 잡힌 후 모달 닫고 다시 열면 같은 메인 카메라로 시작) */
   if(!isIOS){
-    try{localStorage.removeItem('SCAN_CAM_ID')}catch(e){}
-    currentCamIndex=0;
     try{sessionStorage.removeItem('SCAN_CAM_TRY')}catch(e){}
   }
   lastDecodeTime=Date.now();
@@ -1824,9 +1822,13 @@ function _scanConfig(useCamId){
     disableFlip:true
   };
   if(!useCamId){
-    /* iOS처럼 facingMode만 사용 - 해상도 강제 제거
-       (width/height ideal 지정 시 일부 기기에서 망원/광각 카메라가 잡히는 사례) */
-    cfg.videoConstraints={facingMode:'environment'};
+    /* iOS처럼 facingMode 사용 + 해상도 ideal 1920x1080
+       (망원/광각 회피 로직이 있으니 해상도 지정해도 안전, 카메라 앱 수준 화질 확보) */
+    cfg.videoConstraints={
+      facingMode:'environment',
+      width:{ideal:1920},
+      height:{ideal:1080}
+    };
   }
   return cfg;
 }
@@ -1885,12 +1887,24 @@ function _captureActiveTrack(){
           }).catch(function(e){console.warn('enumerateDevices fail:',e)});
         }
 
-        /* zoom 1.0 강제 적용 (확대된 카메라가 잡혔을 때 정상 1x로 복귀) */
+        /* zoom 1.0 + 연속 자동초점 + 최고 해상도를 한 번에 applyConstraints로 적용
+           (화질 향상: 카메라 앱 수준에 가깝게) */
+        var advConstraint={};
         if(caps.zoom&&typeof caps.zoom.min==='number'){
-          var targetZoom=Math.max(caps.zoom.min,Math.min(1.0,caps.zoom.max||1.0));
+          advConstraint.zoom=Math.max(caps.zoom.min,Math.min(1.0,caps.zoom.max||1.0));
+        }
+        if(caps.focusMode&&caps.focusMode.indexOf&&caps.focusMode.indexOf('continuous')>=0){
+          advConstraint.focusMode='continuous';
+        }
+        /* 활성 카메라의 capability에 따라 가능한 최고 해상도 적용 (FHD 상한) */
+        if(caps.width&&caps.width.max&&caps.width.max>=1920&&
+           caps.height&&caps.height.max&&caps.height.max>=1080){
+          advConstraint.width=1920;advConstraint.height=1080;
+        }
+        if(Object.keys(advConstraint).length>0){
           try{
-            activeTrack.applyConstraints({advanced:[{zoom:targetZoom}]});
-            console.log('[scanner] zoom forced:',targetZoom);
+            activeTrack.applyConstraints({advanced:[advConstraint]});
+            console.log('[scanner] constraints applied:',advConstraint);
           }catch(e){}
         }
 
@@ -1920,8 +1934,12 @@ function _captureActiveTrack(){
             return;
           }
         }
-        /* 메인 카메라 잡힘 → 시도 카운터 리셋 */
+        /* 메인 카메라 잡힘 → 시도 카운터 리셋 + deviceId 저장
+           (다음 모달 진입 시 즉시 같은 메인 카메라로 시작) */
         try{sessionStorage.removeItem('SCAN_CAM_TRY')}catch(e){}
+        if(s.deviceId){
+          try{localStorage.setItem('SCAN_CAM_ID',s.deviceId)}catch(e){}
+        }
       }
     }catch(e){}
   },500);
