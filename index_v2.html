@@ -2062,12 +2062,10 @@ function _attachQuaggaHandlers(){
     lastDecodedIsQR=false;
     onCodeRead(c);
   });
-  /* 빈 프레임 감지: lastConfirmedCode 해제 */
-  var noDetectFrames=0;
-  Quagga.onProcessed(function(result){
-    if(result&&result.codeResult&&result.codeResult.code){noDetectFrames=0}
-    else{noDetectFrames++;if(noDetectFrames>=15&&lastConfirmedCode){lastConfirmedCode='';noDetectFrames=0}}
-  });
+  /* 빈 프레임 감지 로직 제거됨:
+     Quagga는 1D 전용이라 QR 비추는 동안 매 프레임 "빈" 결과를 반환 →
+     이전엔 15 frame 누적 시 lastConfirmedCode를 풀어 QR이 즉시 중복 인식되는 버그 발생.
+     watchdog의 2초 시간 기반 cooldown 해제만 사용. */
 }
 
 function restartQuagga(){
