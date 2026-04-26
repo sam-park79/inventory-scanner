@@ -1847,12 +1847,32 @@ function startScanner(){
       }
     }
 
-    /* 4순위 (기본): 매번 라벨 기반 메인 카메라 자동 식별
-       → 첫 진입 또는 매칭 모두 실패 시 사용 */
-    var mainIdx=_pickMainCameraIndex(html5Cameras);
-    currentCamIndex=mainIdx;
-    console.log('[scanner] picked main by label:',html5Cameras[mainIdx].label);
-    _startWithCamera(mainIdx);
+    /* 4순위 (기본): silent camera test로 진짜 메인 카메라 식별
+       (갤럭시 Chrome이 광각에 디지털 줌 적용해 zoom.min=1.0으로 보고하는 환경 대응)
+       모든 후면 카메라 capability를 짧게 검사 → 메인 deviceId 식별 → localStorage prev에 저장 */
+    scCamInfoEl.textContent='메인 카메라 검색 중...';
+    _detectMainCameraSilent(function(result){
+      if(result&&result.allCams){
+        html5Cameras=result.allCams.map(function(d){return{id:d.deviceId,label:d.label||'카메라'}});
+        allCameras=result.allCams.map(function(d){return{deviceId:d.deviceId,label:d.label||'카메라'}});
+      }
+      if(result&&result.deviceId){
+        for(var i=0;i<html5Cameras.length;i++){
+          if(html5Cameras[i].id===result.deviceId){
+            currentCamIndex=i;
+            try{localStorage.setItem('SCAN_CAM_PREV_ID',result.deviceId)}catch(e){}
+            if(result.label){try{localStorage.setItem('SCAN_CAM_PREV_LABEL',result.label)}catch(e){}}
+            console.log('[scanner] silent test selected main:',result.label);
+            _startWithCamera(i);return;
+          }
+        }
+      }
+      /* silent test 실패 → 라벨 기반 fallback */
+      var mainIdx=_pickMainCameraIndex(html5Cameras);
+      currentCamIndex=mainIdx;
+      console.log('[scanner] fallback to label-based main:',html5Cameras[mainIdx].label);
+      _startWithCamera(mainIdx);
+    });
   }).catch(function(e){
     console.warn('enumerateDevices fail:',e);
     _startWithFacingMode();
@@ -1929,6 +1949,88 @@ function _pickMainCameraIndex(cams){
     }
   }
   return 0; /* 라벨로 식별 안 되면 첫 번째 (보통 메인) */
+}
+
+/* 모든 후면 카메라를 차례로 짧게 열어 capability 검사 → 진짜 메인 카메라 deviceId 반환
+   (갤럭시 Chrome이 광각에 디지털 줌 적용해 caps.zoom.min=1.0으로 보고하는 환경 대응)
+   판정 기준 (우선순위):
+   1. 라벨에 wide/tele/ultra/광각/망원 키워드 있으면 제외
+   2. caps.zoom.min < 0.99 (광각) 또는 > 1.01 (망원) 제외
+   3. 남은 카메라 중 caps.width.max 가장 큰 카메라 = 메인
+   결과는 callback으로 전달, 실패하면 null */
+function _detectMainCameraSilent(callback){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!navigator.mediaDevices.enumerateDevices){
+    callback(null);return;
+  }
+  navigator.mediaDevices.enumerateDevices().then(function(devs){
+    var backCams=devs.filter(function(d){
+      if(d.kind!=='videoinput')return false;
+      var l=(d.label||'').toLowerCase();
+      return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0;
+    });
+    if(!backCams.length)backCams=devs.filter(function(d){return d.kind==='videoinput'});
+    if(!backCams.length){callback(null);return}
+    if(backCams.length===1){
+      callback({deviceId:backCams[0].deviceId,label:backCams[0].label,allCams:backCams});return;
+    }
+
+    var results=[];
+    var idx=0;
+    function testNext(){
+      if(idx>=backCams.length){
+        /* 모든 카메라 검사 완료 → 메인 식별 */
+        var mainCandidate=null;
+        for(var i=0;i<results.length;i++){
+          var r=results[i];
+          if(r.isWide||r.isTele)continue;
+          if(!mainCandidate||r.maxWidth>mainCandidate.maxWidth){
+            mainCandidate=r;
+          }
+        }
+        /* 메인 후보 못 찾으면 라벨 기반 fallback */
+        if(!mainCandidate){
+          var fallbackIdx=_pickMainCameraIndex(backCams);
+          mainCandidate={deviceId:backCams[fallbackIdx].deviceId,label:backCams[fallbackIdx].label};
+        }
+        console.log('[scanner] silent test main:',mainCandidate.label,'maxW:',mainCandidate.maxWidth);
+        callback({deviceId:mainCandidate.deviceId,label:mainCandidate.label,allCams:backCams});
+        return;
+      }
+      var cam=backCams[idx];
+      var labelLower=(cam.label||'').toLowerCase();
+      var isWideByLabel=labelLower.indexOf('wide')>=0||labelLower.indexOf('ultra')>=0||labelLower.indexOf('광각')>=0;
+      var isTeleByLabel=labelLower.indexOf('tele')>=0||labelLower.indexOf('망원')>=0;
+      navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:cam.deviceId}}}).then(function(stream){
+        var track=stream.getVideoTracks()[0];
+        var caps=track.getCapabilities?track.getCapabilities():{};
+        var zoomMin=(caps.zoom&&typeof caps.zoom.min==='number')?caps.zoom.min:1.0;
+        var maxWidth=(caps.width&&caps.width.max)?caps.width.max:0;
+        var isWide=isWideByLabel||zoomMin<0.99;
+        var isTele=isTeleByLabel||zoomMin>1.01;
+        results.push({
+          deviceId:cam.deviceId,label:cam.label,
+          isWide:isWide,isTele:isTele,maxWidth:maxWidth,zoomMin:zoomMin
+        });
+        console.log('[scanner] cam test:',cam.label,'zoom.min:',zoomMin,'maxW:',maxWidth,'wide:',isWide,'tele:',isTele);
+        try{stream.getTracks().forEach(function(t){t.stop()})}catch(e){}
+        idx++;
+        /* 갤럭시 카메라 빠른 stop/start 충돌 방지를 위해 약간 대기 */
+        setTimeout(testNext,100);
+      }).catch(function(e){
+        console.warn('[scanner] cam test fail:',cam.label,e);
+        results.push({
+          deviceId:cam.deviceId,label:cam.label,
+          isWide:isWideByLabel,isTele:isTeleByLabel,maxWidth:0,zoomMin:1.0
+        });
+        idx++;
+        setTimeout(testNext,100);
+      });
+    }
+    testNext();
+  }).catch(function(e){
+    console.warn('enumerateDevices fail in silent test:',e);
+    callback(null);
+  });
 }
 
 function _captureActiveTrack(){
