@@ -1373,11 +1373,9 @@ function toggleAllFormats(cb){
   showToast(msg);
   /* 스캐너 재시작 (새 디코더 적용) */
   if(document.getElementById('scannerOverlay').classList.contains('show')){
-    if(isIOS){
-      restartQuagga();
-    }else{
-      restartScanner();
-    }
+    /* iOS도 restartScanner로: stopScanner → startScanner → initIOSScanner 풀 흐름
+       (restartQuagga의 부분적 정리보다 더 안정적) */
+    restartScanner();
   }
 }
 
@@ -1909,6 +1907,11 @@ function stopIOSQROnly(){
 
 function getActiveReaders(){
   if(allFormatsMode){
+    /* 위치 모드: 토글 ON이어도 reader 단순화 (여러 reader가 같은 바코드를
+       다른 코드로 디코드해 CONFIRM_COUNT 누적을 방해하는 문제 차단) */
+    if(scanMode==='location'){
+      return ['code_128_reader','ean_reader'];
+    }
     /* i2of5_reader, codabar_reader 제외 (오인식이 잦아 같은 바코드를 다른 결과로 디코드해
        matchCount 누적을 방해함) */
     return ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','upc_reader','upc_e_reader'];
@@ -1949,15 +1952,16 @@ function initIOSScanner(){
         if(err2){console.error('Quagga init fail:',err2);return}
         Quagga.start();
         try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+        _attachQuaggaHandlers();
         startIOSQrScan();
       });
       return;
     }
     Quagga.start();
     try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+    _attachQuaggaHandlers();
     startIOSQrScan();
   });
-  _attachQuaggaHandlers();
 }
 
 function _attachQuaggaHandlers(){
