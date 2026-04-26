@@ -1909,14 +1909,9 @@ function _scanConfig(useCamId){
 function _startWithCamera(idx){
   var cam=html5Cameras[idx];if(!cam)return;
   html5Scanner=_buildScanner();
-  /* 첫 인자에 MediaTrackConstraints 객체 전달: deviceId+해상도 한 번에 처리
-     (이전엔 cam.id만 넘기고 _scanConfig.videoConstraints에 해상도 추가했지만
-      videoConstraints에 deviceId 없어 브라우저가 전면 카메라 잡는 문제 발생) */
-  html5Scanner.start(
-    {deviceId:{exact:cam.id},width:{ideal:1920},height:{ideal:1080}},
-    _scanConfig(true),
-    onCodeDecoded,onCodeDecodeFail
-  )
+  /* string deviceId를 첫 인자에 넘김 (호환성 우선)
+     해상도는 _captureActiveTrack에서 applyConstraints로 후처리 */
+  html5Scanner.start(cam.id,_scanConfig(true),onCodeDecoded,onCodeDecodeFail)
     .then(function(){
       scCamInfoEl.textContent=cam.label||'카메라 '+(idx+1);
       try{localStorage.setItem('SCAN_CAM_ID',cam.id)}catch(e){}
@@ -1924,6 +1919,8 @@ function _startWithCamera(idx){
     })
     .catch(function(err){
       console.error('camera start fail:',err);
+      /* fail 이유를 화면에 표시 (진단용) */
+      scCamInfoEl.textContent='start fail: '+(err.name||'')+' '+(err.message||'').slice(0,40);
       _startWithFacingMode();
     });
 }
@@ -2140,7 +2137,7 @@ function _captureActiveTrack(){
         }catch(e){console.log('[scanner] localStorage exception:',e.message)}
       }
 
-      /* zoom 1.0 + continuous focus + 최고 해상도 적용 */
+      /* zoom + focus는 advanced (best-effort), 해상도는 직접 적용 (강제) */
       var advConstraint={};
       if(caps.zoom&&typeof caps.zoom.min==='number'){
         advConstraint.zoom=Math.max(caps.zoom.min,Math.min(1.0,caps.zoom.max||1.0));
@@ -2148,12 +2145,27 @@ function _captureActiveTrack(){
       if(caps.focusMode&&caps.focusMode.indexOf&&caps.focusMode.indexOf('continuous')>=0){
         advConstraint.focusMode='continuous';
       }
-      if(caps.width&&caps.width.max&&caps.width.max>=1920&&
-         caps.height&&caps.height.max&&caps.height.max>=1080){
-        advConstraint.width=1920;advConstraint.height=1080;
-      }
       if(Object.keys(advConstraint).length>0){
         try{activeTrack.applyConstraints({advanced:[advConstraint]});}catch(e){}
+      }
+      /* 해상도는 advanced 안에 넣지 말고 직접 ideal로 요청 (advanced는 best-effort라 무시되기 쉬움)
+         결과를 진단 패널에 반영 */
+      if(caps.width&&caps.width.max&&caps.width.max>=1280){
+        var targetW=Math.min(1920,caps.width.max);
+        var targetH=Math.min(1080,caps.height?caps.height.max:1080);
+        activeTrack.applyConstraints({
+          width:{ideal:targetW},
+          height:{ideal:targetH}
+        }).then(function(){
+          var ns=activeTrack.getSettings();
+          console.log('[scanner] resolution after apply:',ns.width+'x'+ns.height);
+          /* 진단 패널 갱신 (debug 모드면) */
+          if((location.search.indexOf('debug')>=0||location.hash.indexOf('debug')>=0)&&ns){
+            _showDiagPanel(activeTrack,activeTrack.getCapabilities?activeTrack.getCapabilities():caps,ns,trackLabel);
+          }
+        }).catch(function(e){
+          console.warn('[scanner] resolution apply failed:',e.name,e.message);
+        });
       }
 
       /* enumerateDevices 결과로 카메라 목록 채움 + 광각/망원 회피 + deviceId 저장
