@@ -2137,7 +2137,7 @@ function _captureActiveTrack(){
         }catch(e){console.log('[scanner] localStorage exception:',e.message)}
       }
 
-      /* zoom + focus는 advanced (best-effort), 해상도는 직접 적용 (강제) */
+      /* zoom + focus는 advanced (best-effort), 안전하게 try/catch */
       var advConstraint={};
       if(caps.zoom&&typeof caps.zoom.min==='number'){
         advConstraint.zoom=Math.max(caps.zoom.min,Math.min(1.0,caps.zoom.max||1.0));
@@ -2148,24 +2148,24 @@ function _captureActiveTrack(){
       if(Object.keys(advConstraint).length>0){
         try{activeTrack.applyConstraints({advanced:[advConstraint]});}catch(e){}
       }
-      /* 해상도는 advanced 안에 넣지 말고 직접 ideal로 요청 (advanced는 best-effort라 무시되기 쉬움)
-         결과를 진단 패널에 반영 */
+      /* 해상도 적용을 setTimeout으로 미뤄서 stream 안정화 후 시도
+         (즉시 applyConstraints가 stream을 깨뜨리는 갤럭시 Chrome 동작 회피) */
       if(caps.width&&caps.width.max&&caps.width.max>=1280){
         var targetW=Math.min(1920,caps.width.max);
         var targetH=Math.min(1080,caps.height?caps.height.max:1080);
-        activeTrack.applyConstraints({
-          width:{ideal:targetW},
-          height:{ideal:targetH}
-        }).then(function(){
-          var ns=activeTrack.getSettings();
-          console.log('[scanner] resolution after apply:',ns.width+'x'+ns.height);
-          /* 진단 패널 갱신 (debug 모드면) */
-          if((location.search.indexOf('debug')>=0||location.hash.indexOf('debug')>=0)&&ns){
-            _showDiagPanel(activeTrack,activeTrack.getCapabilities?activeTrack.getCapabilities():caps,ns,trackLabel);
-          }
-        }).catch(function(e){
-          console.warn('[scanner] resolution apply failed:',e.name,e.message);
-        });
+        setTimeout(function(){
+          try{
+            activeTrack.applyConstraints({
+              width:{ideal:targetW},
+              height:{ideal:targetH}
+            }).then(function(){
+              var ns=activeTrack.getSettings?activeTrack.getSettings():null;
+              if(ns)console.log('[scanner] resolution after apply:',ns.width+'x'+ns.height);
+            }).catch(function(e){
+              console.warn('[scanner] resolution apply failed:',e.name||'',e.message||'');
+            });
+          }catch(e){console.warn('apply exception:',e)}
+        },1500);
       }
 
       /* enumerateDevices 결과로 카메라 목록 채움 + 광각/망원 회피 + deviceId 저장
