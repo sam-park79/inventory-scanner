@@ -1861,86 +1861,107 @@ function _startWithFacingMode(){
     });
 }
 
+/* 메인 카메라 식별: wide/tele/ultra/광각/망원 키워드 없는 후면 카메라 */
+function _pickMainCameraIndex(cams){
+  for(var i=0;i<cams.length;i++){
+    var l=((cams[i].label||cams[i].id||'')+'').toLowerCase();
+    if(l.indexOf('wide')<0&&l.indexOf('tele')<0&&l.indexOf('telephoto')<0&&
+       l.indexOf('ultra')<0&&l.indexOf('광각')<0&&l.indexOf('망원')<0){
+      return i;
+    }
+  }
+  return 0; /* 라벨로 식별 안 되면 첫 번째 (보통 메인) */
+}
+
 function _captureActiveTrack(){
   setTimeout(function(){
     try{
       var v=document.querySelector('#html5Reader video');
-      if(v&&v.srcObject){
-        activeTrack=v.srcObject.getVideoTracks()[0];
-        var caps=activeTrack.getCapabilities?activeTrack.getCapabilities():{};
-        var s=activeTrack.getSettings?activeTrack.getSettings():{};
-        console.log('[scanner] resolution:',s.width+'x'+s.height,'caps.zoom:',caps.zoom);
+      if(!v||!v.srcObject)return;
+      activeTrack=v.srcObject.getVideoTracks()[0];
+      var caps=activeTrack.getCapabilities?activeTrack.getCapabilities():{};
+      var s=activeTrack.getSettings?activeTrack.getSettings():{};
+      var trackLabel=activeTrack.label||'';
+      console.log('[scanner] resolution:',s.width+'x'+s.height,'caps.zoom:',caps.zoom,'label:',trackLabel);
 
-        /* 활성 카메라가 있으니 권한 확보됨 → enumerateDevices로 카메라 목록 즉시 채움
-           (Html5Qrcode.getCameras는 활성 카메라 락 충돌로 실패할 수 있어 회피) */
-        if(navigator.mediaDevices&&navigator.mediaDevices.enumerateDevices){
-          navigator.mediaDevices.enumerateDevices().then(function(devs){
-            var backCams=devs.filter(function(d){
-              if(d.kind!=='videoinput')return false;
-              var l=(d.label||'').toLowerCase();
-              return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0;
-            });
-            if(!backCams.length)backCams=devs.filter(function(d){return d.kind==='videoinput'});
-            html5Cameras=backCams.map(function(d){return{id:d.deviceId,label:d.label||'카메라'}});
-            allCameras=backCams.map(function(d){return{deviceId:d.deviceId,label:d.label||'카메라'}});
-            console.log('[scanner] cameras enumerated:',allCameras.length);
-          }).catch(function(e){console.warn('enumerateDevices fail:',e)});
+      /* zoom 1.0 + continuous focus + 최고 해상도 적용 */
+      var advConstraint={};
+      if(caps.zoom&&typeof caps.zoom.min==='number'){
+        advConstraint.zoom=Math.max(caps.zoom.min,Math.min(1.0,caps.zoom.max||1.0));
+      }
+      if(caps.focusMode&&caps.focusMode.indexOf&&caps.focusMode.indexOf('continuous')>=0){
+        advConstraint.focusMode='continuous';
+      }
+      if(caps.width&&caps.width.max&&caps.width.max>=1920&&
+         caps.height&&caps.height.max&&caps.height.max>=1080){
+        advConstraint.width=1920;advConstraint.height=1080;
+      }
+      if(Object.keys(advConstraint).length>0){
+        try{activeTrack.applyConstraints({advanced:[advConstraint]});}catch(e){}
+      }
+
+      /* enumerateDevices 결과로 카메라 목록 채움 + 광각/망원 회피 + deviceId 저장
+         (회피 로직을 enumerateDevices 완료 후에 실행해 html5Cameras가 비어있는 채로 회피 실패하는 문제 방지) */
+      if(!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices){
+        try{sessionStorage.removeItem('SCAN_CAM_TRY')}catch(e){}
+        return;
+      }
+      navigator.mediaDevices.enumerateDevices().then(function(devs){
+        var backCams=devs.filter(function(d){
+          if(d.kind!=='videoinput')return false;
+          var l=(d.label||'').toLowerCase();
+          return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0;
+        });
+        if(!backCams.length)backCams=devs.filter(function(d){return d.kind==='videoinput'});
+        html5Cameras=backCams.map(function(d){return{id:d.deviceId,label:d.label||'카메라'}});
+        allCameras=backCams.map(function(d){return{deviceId:d.deviceId,label:d.label||'카메라'}});
+        console.log('[scanner] cameras enumerated:',allCameras.length);
+
+        /* 라벨로 활성 카메라 매칭해 정확한 deviceId 찾기 (settings.deviceId가 빈 경우 대비) */
+        var activeDeviceId=s.deviceId||'';
+        if(!activeDeviceId&&trackLabel){
+          for(var i=0;i<backCams.length;i++){
+            if(backCams[i].label===trackLabel){activeDeviceId=backCams[i].deviceId;break}
+          }
         }
 
-        /* zoom 1.0 + 연속 자동초점 + 최고 해상도를 한 번에 applyConstraints로 적용
-           (화질 향상: 카메라 앱 수준에 가깝게) */
-        var advConstraint={};
-        if(caps.zoom&&typeof caps.zoom.min==='number'){
-          advConstraint.zoom=Math.max(caps.zoom.min,Math.min(1.0,caps.zoom.max||1.0));
-        }
-        if(caps.focusMode&&caps.focusMode.indexOf&&caps.focusMode.indexOf('continuous')>=0){
-          advConstraint.focusMode='continuous';
-        }
-        /* 활성 카메라의 capability에 따라 가능한 최고 해상도 적용 (FHD 상한) */
-        if(caps.width&&caps.width.max&&caps.width.max>=1920&&
-           caps.height&&caps.height.max&&caps.height.max>=1080){
-          advConstraint.width=1920;advConstraint.height=1080;
-        }
-        if(Object.keys(advConstraint).length>0){
-          try{
-            activeTrack.applyConstraints({advanced:[advConstraint]});
-            console.log('[scanner] constraints applied:',advConstraint);
-          }catch(e){}
+        /* 광각/망원 회피 (zoom.min 기반) */
+        var isWide=caps.zoom&&typeof caps.zoom.min==='number'&&caps.zoom.min<0.99;
+        var isTele=caps.zoom&&typeof caps.zoom.min==='number'&&caps.zoom.min>1.01;
+
+        /* 라벨 기반 추가 회피: 활성 카메라 라벨에 wide/tele 키워드 → 메인 아님 */
+        if(!isWide&&!isTele&&trackLabel){
+          var ll=trackLabel.toLowerCase();
+          if(ll.indexOf('wide')>=0||ll.indexOf('ultra')>=0||ll.indexOf('광각')>=0)isWide=true;
+          else if(ll.indexOf('tele')>=0||ll.indexOf('망원')>=0)isTele=true;
         }
 
-        /* 광각 카메라 자동 회피: zoom.min < 1.0 = 광각 → 다음 후면 카메라로 자동 전환 */
-        if(caps.zoom&&typeof caps.zoom.min==='number'&&caps.zoom.min<0.99&&html5Cameras.length>1){
+        if((isWide||isTele)&&html5Cameras.length>1){
           var tries=0;
           try{tries=parseInt(sessionStorage.getItem('SCAN_CAM_TRY')||'0')}catch(e){}
           if(tries<html5Cameras.length){
             try{sessionStorage.setItem('SCAN_CAM_TRY',(tries+1).toString())}catch(e){}
-            console.log('[scanner] wide cam detected (zoom.min='+caps.zoom.min+'), switching to next cam ('+(tries+1)+'/'+html5Cameras.length+')');
-            currentCamIndex=(currentCamIndex+1)%html5Cameras.length;
-            try{localStorage.setItem('SCAN_CAM_ID',html5Cameras[currentCamIndex].id)}catch(e){}
+            /* 라벨 기반으로 메인 카메라 인덱스 찾아 그것으로 직접 점프 */
+            var mainIdx=_pickMainCameraIndex(html5Cameras);
+            console.log('[scanner] '+(isWide?'wide':'tele')+' detected, jumping to main idx:',mainIdx,'label:',html5Cameras[mainIdx].label);
+            currentCamIndex=mainIdx;
+            try{localStorage.setItem('SCAN_CAM_ID',html5Cameras[mainIdx].id)}catch(e){}
             restartScanner();
             return;
           }
         }
-        /* 망원 카메라 자동 회피: zoom.min > 1.0 = 망원 → 다음 후면 카메라로 전환 */
-        if(caps.zoom&&typeof caps.zoom.min==='number'&&caps.zoom.min>1.01&&html5Cameras.length>1){
-          var triesT=0;
-          try{triesT=parseInt(sessionStorage.getItem('SCAN_CAM_TRY')||'0')}catch(e){}
-          if(triesT<html5Cameras.length){
-            try{sessionStorage.setItem('SCAN_CAM_TRY',(triesT+1).toString())}catch(e){}
-            console.log('[scanner] tele cam detected (zoom.min='+caps.zoom.min+'), switching to next cam ('+(triesT+1)+'/'+html5Cameras.length+')');
-            currentCamIndex=(currentCamIndex+1)%html5Cameras.length;
-            try{localStorage.setItem('SCAN_CAM_ID',html5Cameras[currentCamIndex].id)}catch(e){}
-            restartScanner();
-            return;
-          }
-        }
+
         /* 메인 카메라 잡힘 → 시도 카운터 리셋 + deviceId 저장
-           (다음 모달 진입 시 즉시 같은 메인 카메라로 시작) */
+           (settings.deviceId가 빈 경우엔 라벨 매칭으로 찾은 deviceId 사용) */
         try{sessionStorage.removeItem('SCAN_CAM_TRY')}catch(e){}
-        if(s.deviceId){
-          try{localStorage.setItem('SCAN_CAM_ID',s.deviceId)}catch(e){}
+        if(activeDeviceId){
+          try{localStorage.setItem('SCAN_CAM_ID',activeDeviceId)}catch(e){}
+          console.log('[scanner] saved main cam:',activeDeviceId);
         }
-      }
+      }).catch(function(e){
+        console.warn('enumerateDevices fail:',e);
+        try{sessionStorage.removeItem('SCAN_CAM_TRY')}catch(e){}
+      });
     }catch(e){}
   },500);
 }
