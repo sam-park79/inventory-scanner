@@ -1861,32 +1861,12 @@ function startScanner(){
       }
     }
 
-    /* 4순위 (기본): silent camera test로 진짜 메인 카메라 식별
-       (갤럭시 Chrome이 광각에 디지털 줌 적용해 zoom.min=1.0으로 보고하는 환경 대응)
-       모든 후면 카메라 capability를 짧게 검사 → 메인 deviceId 식별 → localStorage prev에 저장 */
-    scCamInfoEl.textContent='메인 카메라 검색 중...';
-    _detectMainCameraSilent(function(result){
-      if(result&&result.allCams){
-        html5Cameras=result.allCams.map(function(d){return{id:d.deviceId,label:d.label||'카메라'}});
-        allCameras=result.allCams.map(function(d){return{deviceId:d.deviceId,label:d.label||'카메라'}});
-      }
-      if(result&&result.deviceId){
-        for(var i=0;i<html5Cameras.length;i++){
-          if(html5Cameras[i].id===result.deviceId){
-            currentCamIndex=i;
-            try{localStorage.setItem('SCAN_CAM_PREV_ID',result.deviceId)}catch(e){}
-            if(result.label){try{localStorage.setItem('SCAN_CAM_PREV_LABEL',result.label)}catch(e){}}
-            console.log('[scanner] silent test selected main:',result.label);
-            _startWithCamera(i);return;
-          }
-        }
-      }
-      /* silent test 실패 → 라벨 기반 fallback */
-      var mainIdx=_pickMainCameraIndex(html5Cameras);
-      currentCamIndex=mainIdx;
-      console.log('[scanner] fallback to label-based main:',html5Cameras[mainIdx].label);
-      _startWithCamera(mainIdx);
-    });
+    /* 4순위 (기본): 라벨 기반 메인 카메라 자동 식별
+       (silent test는 갤럭시에서 카메라 락 충돌로 화면 먹통 발생 → 일시 비활성화) */
+    var mainIdx=_pickMainCameraIndex(html5Cameras);
+    currentCamIndex=mainIdx;
+    console.log('[scanner] picked main by label:',html5Cameras[mainIdx].label);
+    _startWithCamera(mainIdx);
   }).catch(function(e){
     console.warn('enumerateDevices fail:',e);
     _startWithFacingMode();
