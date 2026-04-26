@@ -1410,6 +1410,13 @@ function openScanner(mode){
   scanMode=mode||'search';
   scanned=false;lastCode='';matchCount=0;torchOn=false;lastConfirmedCode='';emptyFrames=0;
   recentCodes=[];pendingCode=''; /* 빈도 누적 + 수동 확정 후보 리셋 */
+  /* AOS: 모달 첫 진입 시 이전 저장 카메라 정리 → 항상 facingMode 1x로 시작
+     (restartScanner는 토글 변경/카메라 전환 시 호출되므로 그 때는 정리하지 않음) */
+  if(!isIOS){
+    try{localStorage.removeItem('SCAN_CAM_ID')}catch(e){}
+    currentCamIndex=0;
+    try{sessionStorage.removeItem('SCAN_CAM_TRY')}catch(e){}
+  }
   lastDecodeTime=Date.now();
   scReadEl.textContent='';scCamInfoEl.textContent='';
   document.getElementById('btnTorch').classList.remove('active');
@@ -1755,10 +1762,21 @@ function startScanner(){
   }
   startWatchdog();
 
-  /* localStorage 정리: 이전에 저장된 deviceId가 광각/망원 카메라일 수 있어
-     첫 시작은 항상 facingMode 사용 → OS가 기본 1x 메인 카메라 자동 선택 */
-  try{localStorage.removeItem('SCAN_CAM_ID')}catch(e){}
-  currentCamIndex=0;
+  /* localStorage에 사용자 선택 카메라가 있으면 그것 사용 (카메라 전환 버튼 누른 후 흐름)
+     - 첫 진입은 openScanner에서 localStorage 정리하므로 비어있음 → facingMode (1x 메인)
+     - 카메라 전환 누르면 switchCamera가 deviceId 저장 → 여기서 deviceId 사용
+     - 토글 변경(restartScanner) 시에도 사용자 선택 카메라 유지 */
+  var savedId='';
+  try{savedId=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
+  if(savedId&&html5Cameras&&html5Cameras.length>0){
+    for(var i=0;i<html5Cameras.length;i++){
+      if(html5Cameras[i].id===savedId){
+        currentCamIndex=i;
+        _startWithCamera(i);
+        return;
+      }
+    }
+  }
 
   /* iOS처럼 facingMode 'environment'로 시작
      (deviceId 첫 시작은 기기에 따라 광각/망원 잡을 수 있어 회피) */
