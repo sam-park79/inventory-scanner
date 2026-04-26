@@ -2027,6 +2027,73 @@ function _detectMainCameraSilent(callback){
   });
 }
 
+/* 진단 패널: ?debug URL에서 활성화. 활성 카메라 + 모든 후면 카메라 정보를 화면에 표시
+   사용자가 스크린샷 하나로 모든 정보 전달 가능하게 */
+function _showDiagPanel(activeTrack,caps,s,trackLabel){
+  var panel=document.getElementById('diagPanel');
+  if(!panel){
+    panel=document.createElement('div');
+    panel.id='diagPanel';
+    panel.style.cssText='position:fixed;top:60px;left:8px;right:8px;z-index:99999;background:rgba(0,0,0,.92);color:#0f0;font:11px/1.4 monospace;padding:10px;border:1px solid #0f0;border-radius:6px;max-height:60vh;overflow:auto;white-space:pre-wrap;word-break:break-all';
+    document.body.appendChild(panel);
+    var closeBtn=document.createElement('button');
+    closeBtn.textContent='✕';
+    closeBtn.style.cssText='position:absolute;top:4px;right:6px;background:#f00;color:#fff;border:0;width:24px;height:24px;border-radius:4px;font-weight:bold';
+    closeBtn.onclick=function(){panel.style.display='none'};
+    panel.appendChild(closeBtn);
+  }
+  panel.style.display='block';
+
+  /* 활성 카메라 상세 정보 */
+  var activeInfo='=== ACTIVE CAMERA ===\n';
+  activeInfo+='label: '+trackLabel+'\n';
+  activeInfo+='resolution: '+s.width+'x'+s.height+'\n';
+  activeInfo+='deviceId: '+(s.deviceId||'(empty)')+'\n';
+  if(caps.zoom){
+    activeInfo+='zoom: min='+caps.zoom.min+' max='+caps.zoom.max+' step='+caps.zoom.step+'\n';
+  }else{
+    activeInfo+='zoom: NOT SUPPORTED\n';
+  }
+  if(caps.width){
+    activeInfo+='width: min='+caps.width.min+' max='+caps.width.max+'\n';
+  }
+  if(caps.height){
+    activeInfo+='height: min='+caps.height.min+' max='+caps.height.max+'\n';
+  }
+  if(caps.facingMode){
+    activeInfo+='facingMode: '+JSON.stringify(caps.facingMode)+'\n';
+  }
+  activeInfo+='currentZoom: '+(s.zoom||'?')+'\n';
+
+  /* localStorage 테스트 + 저장된 값 */
+  activeInfo+='\n=== STORAGE ===\n';
+  try{
+    var tk='_t_'+Date.now();
+    localStorage.setItem(tk,'1');
+    activeInfo+='localStorage: '+(localStorage.getItem(tk)==='1'?'OK':'FAIL')+'\n';
+    localStorage.removeItem(tk);
+  }catch(e){activeInfo+='localStorage: BLOCKED ('+e.message+')\n'}
+  try{activeInfo+='PREV_ID: '+(localStorage.getItem('SCAN_CAM_PREV_ID')||'(empty)').slice(0,40)+'\n'}catch(e){}
+  try{activeInfo+='PREV_LABEL: '+(localStorage.getItem('SCAN_CAM_PREV_LABEL')||'(empty)')+'\n'}catch(e){}
+  try{activeInfo+='SESSION_ID: '+(sessionStorage.getItem('SCAN_CAM_ID_SESSION')||'(empty)').slice(0,40)+'\n'}catch(e){}
+  try{activeInfo+='SESSION_LABEL: '+(sessionStorage.getItem('SCAN_CAM_LABEL_SESSION')||'(empty)')+'\n'}catch(e){}
+
+  /* 모든 후면 카메라 목록 */
+  activeInfo+='\n=== ALL BACK CAMERAS ('+(html5Cameras?html5Cameras.length:0)+') ===\n';
+  if(html5Cameras&&html5Cameras.length){
+    for(var i=0;i<html5Cameras.length;i++){
+      var marker=(html5Cameras[i].id===s.deviceId)?'>>> ':'    ';
+      activeInfo+=marker+'['+i+'] '+html5Cameras[i].label+'\n';
+    }
+  }
+  activeInfo+='\n(✕ to close. Screenshot this!)';
+
+  /* 첫 자식(닫기 버튼) 빼고 텍스트 갱신 */
+  var textNode=panel.firstChild;
+  if(textNode&&textNode.nodeType===3){panel.removeChild(textNode)}
+  panel.insertBefore(document.createTextNode(activeInfo),panel.firstChild);
+}
+
 function _captureActiveTrack(){
   setTimeout(function(){
     try{
@@ -2047,6 +2114,11 @@ function _captureActiveTrack(){
         diagInfo+=' | maxW:'+caps.width.max;
       }
       scCamInfoEl.textContent=diagInfo;
+
+      /* 진단 모드: URL에 ?debug 있으면 모든 카메라 정보를 화면에 패널로 표시 */
+      if(location.search.indexOf('debug')>=0||location.hash.indexOf('debug')>=0){
+        _showDiagPanel(activeTrack,caps,s,trackLabel);
+      }
 
       /* localStorage 테스트 - 한 번만 */
       if(!window._lsTestDone){
