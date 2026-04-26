@@ -1569,7 +1569,11 @@ function onCodeRead(code){
 
     /* 1D 바코드는 CONFIRM_COUNT 누적 (오인식 방지) */
     if(!isValidCode(code))return;
-    if(code===lastCode)matchCount++;else{lastCode=code;matchCount=1}
+    /* 긴 코드 우선: 짧은 부정확 디코드(예: 17자리 바코드의 12자리 잘못된 디코드)는 lastCode 교체 안 함 */
+    if(code===lastCode)matchCount++;
+    else if(!lastCode||code.length>=lastCode.length){lastCode=code;matchCount=1}
+    /* code.length < lastCode.length: 무시 (현재 누적 중인 긴 코드 보호) */
+    else return;
     scReadEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
     if(matchCount>=CONFIRM_COUNT){
       scanned=true;
@@ -1598,7 +1602,10 @@ function onCodeRead(code){
     }
   }
   if(code!==lastConfirmedCode)lastConfirmedCode='';
-  if(code===lastCode)matchCount++;else{lastCode=code;matchCount=1}
+  /* 긴 코드 우선: 짧은 부정확 디코드는 lastCode 교체 안 함 */
+  if(code===lastCode)matchCount++;
+  else if(!lastCode||code.length>=lastCode.length){lastCode=code;matchCount=1}
+  else return; /* 현재 lastCode보다 짧으면 무시 */
   scReadEl.textContent='✓ '+code+' ('+matchCount+'/'+CONFIRM_COUNT+')';
   if(matchCount>=CONFIRM_COUNT)onScanConfirmed(code);
 }
