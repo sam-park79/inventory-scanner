@@ -1893,16 +1893,12 @@ function _scanConfig(useCamId){
     aspectRatio:1.7777,
     disableFlip:true
   };
-  /* 해상도 요청을 useCamId 여부와 무관하게 항상 적용 (이전: useCamId일 때 누락 → 360x640 저화질) */
   if(!useCamId){
+    /* facingMode일 때만 videoConstraints 사용. deviceId 사용 시에는
+       _startWithCamera의 start 첫 인자에 MediaTrackConstraints 객체를 직접 넘겨
+       deviceId+해상도를 한 번에 처리 (videoConstraints에 deviceId 없으면 전면 카메라 잡히는 문제 회피) */
     cfg.videoConstraints={
       facingMode:'environment',
-      width:{ideal:1920},
-      height:{ideal:1080}
-    };
-  }else{
-    /* deviceId 사용 시에도 해상도 ideal 적용 - 이게 누락되어 360x640으로 저화질이었음 */
-    cfg.videoConstraints={
       width:{ideal:1920},
       height:{ideal:1080}
     };
@@ -1913,7 +1909,14 @@ function _scanConfig(useCamId){
 function _startWithCamera(idx){
   var cam=html5Cameras[idx];if(!cam)return;
   html5Scanner=_buildScanner();
-  html5Scanner.start(cam.id,_scanConfig(true),onCodeDecoded,onCodeDecodeFail)
+  /* 첫 인자에 MediaTrackConstraints 객체 전달: deviceId+해상도 한 번에 처리
+     (이전엔 cam.id만 넘기고 _scanConfig.videoConstraints에 해상도 추가했지만
+      videoConstraints에 deviceId 없어 브라우저가 전면 카메라 잡는 문제 발생) */
+  html5Scanner.start(
+    {deviceId:{exact:cam.id},width:{ideal:1920},height:{ideal:1080}},
+    _scanConfig(true),
+    onCodeDecoded,onCodeDecodeFail
+  )
     .then(function(){
       scCamInfoEl.textContent=cam.label||'카메라 '+(idx+1);
       try{localStorage.setItem('SCAN_CAM_ID',cam.id)}catch(e){}
