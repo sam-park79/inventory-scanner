@@ -1337,6 +1337,7 @@ var lastDecodeTime=0; /* 마지막 디코드 콜백 시각 (watchdog용) */
 var watchdogTimer=null;
 var recentCodes=[]; /* 최근 5번 디코드 결과 (1D 바코드 빈도 기반 누적용) */
 var pendingCode=''; /* scRead에 표시 중인 코드 (탭하면 수동 확정) */
+var lastJsQRTime=0; /* jsQR이 마지막 QR 디코드한 시각 (Quagga의 QR 영역 오인식 차단용) */
 var allFormatsMode=false; /* 모든 바코드 형식 인식 모드 */
 
 function getActiveFormats(){
@@ -1926,6 +1927,7 @@ function startIOSQrScan(){
       /* 화면 중앙 60% × 60% 영역(가이드 박스 영역 약간 여유) */
       var marginX=w*0.05,marginY=h*0.20;
       if(qrCx<marginX||qrCx>w-marginX||qrCy<marginY||qrCy>h-marginY)return;
+      lastJsQRTime=Date.now();
       lastDecodedIsQR=true;
       onCodeRead(qr.data);
     }
@@ -2051,6 +2053,9 @@ function _attachQuaggaHandlers(){
   try{Quagga.offDetected()}catch(e){}
   try{Quagga.offProcessed()}catch(e){}
   Quagga.onDetected(function(result){
+    /* jsQR이 QR을 인식한 직후 0.5초간 Quagga 결과 무시
+       (Quagga가 QR finder pattern을 1D 바코드로 잘못 디코드해서 false 카운팅하는 문제 차단) */
+    if(Date.now()-lastJsQRTime<500)return;
     var c=result.codeResult&&result.codeResult.code;
     if(!c)return;
     if(c.length<12)return; /* 12자 미만 디코드는 짧은 부정확 결과 가능성 높음 */
