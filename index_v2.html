@@ -1359,7 +1359,9 @@ function isValidCode(code){
   if(!code)return false;
   /* QR 코드 */
   if(lastDecodedIsQR){
-    /* 토글 OFF: QR도 13자리만, 토글 ON: 모든 QR 통과 */
+    /* 위치 모드 QR: 자리수 무관 (위치 QR은 한글/URL/숫자 등 다양한 형식 사용) */
+    if(scanMode==='location')return true;
+    /* 검색/이동 모드 토글 OFF: QR도 13자리 숫자만, 토글 ON: 모든 QR 통과 */
     if(allFormatsMode)return true;
     return /^\d{13}$/.test(code);
   }
