@@ -1906,7 +1906,9 @@ function stopIOSQROnly(){
 
 function getActiveReaders(){
   if(allFormatsMode){
-    return ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','upc_reader','upc_e_reader','i2of5_reader','codabar_reader'];
+    /* i2of5_reader, codabar_reader 제외 (오인식이 잦아 같은 바코드를 다른 결과로 디코드해
+       matchCount 누적을 방해함) */
+    return ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','upc_reader','upc_e_reader'];
   }
   return ['code_128_reader','ean_reader'];
 }
