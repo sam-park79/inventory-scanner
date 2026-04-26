@@ -1755,34 +1755,28 @@ function startScanner(){
   }
   startWatchdog();
 
-  var savedId='';try{savedId=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
+  /* localStorage 정리: 이전에 저장된 deviceId가 광각/망원 카메라일 수 있어
+     첫 시작은 항상 facingMode 사용 → OS가 기본 1x 메인 카메라 자동 선택 */
+  try{localStorage.removeItem('SCAN_CAM_ID')}catch(e){}
+  currentCamIndex=0;
 
-  Html5Qrcode.getCameras().then(function(cams){
-    /* 후면 카메라만 필터링 */
-    html5Cameras=cams.filter(function(c){
-      var l=(c.label||'').toLowerCase();
-      return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0;
-    });
-    if(!html5Cameras.length)html5Cameras=cams;
-    /* 외부 호환 */
-    allCameras=html5Cameras.map(function(c){return{deviceId:c.id,label:c.label}});
+  /* iOS처럼 facingMode 'environment'로 시작
+     (deviceId 첫 시작은 기기에 따라 광각/망원 잡을 수 있어 회피) */
+  _startWithFacingMode();
 
-    if(savedId){
-      for(var i=0;i<html5Cameras.length;i++){
-        if(html5Cameras[i].id===savedId){currentCamIndex=i;break}
-      }
-    }
-    if(currentCamIndex>=html5Cameras.length)currentCamIndex=0;
-
-    if(html5Cameras.length>0){
-      _startWithCamera(currentCamIndex);
-    }else{
-      _startWithFacingMode();
-    }
-  }).catch(function(e){
-    console.warn('getCameras failed:',e);
-    _startWithFacingMode();
-  });
+  /* 카메라 목록은 백그라운드에서 채움 (카메라 전환 버튼용)
+     facingMode 카메라 시작 후 충분한 시간 두고 호출해 카메라 락 충돌 방지 */
+  setTimeout(function(){
+    if(typeof Html5Qrcode==='undefined')return;
+    Html5Qrcode.getCameras().then(function(cams){
+      html5Cameras=cams.filter(function(c){
+        var l=(c.label||'').toLowerCase();
+        return l.indexOf('front')<0&&l.indexOf('selfie')<0&&l.indexOf('전면')<0;
+      });
+      if(!html5Cameras.length)html5Cameras=cams;
+      allCameras=html5Cameras.map(function(c){return{deviceId:c.id,label:c.label}});
+    }).catch(function(){});
+  },1500);
 }
 
 function _buildScanner(){
@@ -1806,7 +1800,9 @@ function _scanConfig(useCamId){
     disableFlip:true
   };
   if(!useCamId){
-    cfg.videoConstraints={facingMode:'environment',width:{ideal:1280},height:{ideal:720}};
+    /* iOS처럼 facingMode만 사용 - 해상도 강제 제거
+       (width/height ideal 지정 시 일부 기기에서 망원/광각 카메라가 잡히는 사례) */
+    cfg.videoConstraints={facingMode:'environment'};
   }
   return cfg;
 }
@@ -1849,14 +1845,38 @@ function _captureActiveTrack(){
         var s=activeTrack.getSettings?activeTrack.getSettings():{};
         console.log('[scanner] resolution:',s.width+'x'+s.height,'caps.zoom:',caps.zoom);
 
-        /* 광각 카메라 자동 회피: zoom.min < 1.0 = 광각 → 다음 후면 카메라로 자동 전환
-           (확대 X, 다른 메인 카메라 선택만) */
+        /* zoom 1.0 강제 적용 (확대된 카메라가 잡혔을 때 정상 1x로 복귀)
+           메인 카메라(zoom.min=1.0): 변화 없음
+           광각 카메라(zoom.min<1.0): 1.0으로 → 메인과 같은 시야
+           망원 카메라(zoom.min>1.0): native min(이미 확대됨, 별도 회피 필요) */
+        if(caps.zoom&&typeof caps.zoom.min==='number'){
+          var targetZoom=Math.max(caps.zoom.min,Math.min(1.0,caps.zoom.max||1.0));
+          try{
+            activeTrack.applyConstraints({advanced:[{zoom:targetZoom}]});
+            console.log('[scanner] zoom forced:',targetZoom);
+          }catch(e){}
+        }
+
+        /* 광각 카메라 자동 회피: zoom.min < 1.0 = 광각 → 다음 후면 카메라로 자동 전환 */
         if(caps.zoom&&typeof caps.zoom.min==='number'&&caps.zoom.min<0.99&&html5Cameras.length>1){
           var tries=0;
           try{tries=parseInt(sessionStorage.getItem('SCAN_CAM_TRY')||'0')}catch(e){}
           if(tries<html5Cameras.length){
             try{sessionStorage.setItem('SCAN_CAM_TRY',(tries+1).toString())}catch(e){}
             console.log('[scanner] wide cam detected (zoom.min='+caps.zoom.min+'), switching to next cam ('+(tries+1)+'/'+html5Cameras.length+')');
+            currentCamIndex=(currentCamIndex+1)%html5Cameras.length;
+            try{localStorage.setItem('SCAN_CAM_ID',html5Cameras[currentCamIndex].id)}catch(e){}
+            restartScanner();
+            return;
+          }
+        }
+        /* 망원 카메라 자동 회피: zoom.min > 1.0 = 망원 → 다음 후면 카메라로 전환 */
+        if(caps.zoom&&typeof caps.zoom.min==='number'&&caps.zoom.min>1.01&&html5Cameras.length>1){
+          var triesT=0;
+          try{triesT=parseInt(sessionStorage.getItem('SCAN_CAM_TRY')||'0')}catch(e){}
+          if(triesT<html5Cameras.length){
+            try{sessionStorage.setItem('SCAN_CAM_TRY',(triesT+1).toString())}catch(e){}
+            console.log('[scanner] tele cam detected (zoom.min='+caps.zoom.min+'), switching to next cam ('+(triesT+1)+'/'+html5Cameras.length+')');
             currentCamIndex=(currentCamIndex+1)%html5Cameras.length;
             try{localStorage.setItem('SCAN_CAM_ID',html5Cameras[currentCamIndex].id)}catch(e){}
             restartScanner();
