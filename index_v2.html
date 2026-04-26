@@ -1356,8 +1356,8 @@ function isValidCode(code){
     if(allFormatsMode)return true;
     return /^\d{13}$/.test(code);
   }
-  /* 1D 바코드: 토글 ON은 8자 이상 영숫자, 토글 OFF는 정확히 13자리 숫자 */
-  if(allFormatsMode)return code.length>=8&&/^[A-Za-z0-9_\-]+$/.test(code);
+  /* 1D 바코드: 토글 ON은 12자 이상 영숫자 (짧은 부정확 디코드 차단), 토글 OFF는 정확히 13자리 숫자 */
+  if(allFormatsMode)return code.length>=12&&/^[A-Za-z0-9_\-]+$/.test(code);
   return /^\d{13}$/.test(code);
 }
 
@@ -1914,9 +1914,9 @@ function getActiveReaders(){
     if(scanMode==='location'){
       return ['code_128_reader','ean_reader'];
     }
-    /* i2of5_reader, codabar_reader 제외 (오인식이 잦아 같은 바코드를 다른 결과로 디코드해
-       matchCount 누적을 방해함) */
-    return ['code_128_reader','ean_reader','ean_8_reader','code_39_reader','upc_reader','upc_e_reader'];
+    /* ean_8/upc_e 제외 (긴 바코드 일부를 8자리로 잘못 디코드해 정확한 결과 누적 방해)
+       i2of5/codabar 제외 (오인식 빈번) */
+    return ['code_128_reader','ean_reader','code_39_reader','upc_reader'];
   }
   return ['code_128_reader','ean_reader'];
 }
@@ -1973,7 +1973,7 @@ function _attachQuaggaHandlers(){
   Quagga.onDetected(function(result){
     var c=result.codeResult&&result.codeResult.code;
     if(!c)return;
-    if(c.length<8)return;
+    if(c.length<12)return; /* 12자 미만 디코드는 짧은 부정확 결과 가능성 높음 */
     lastDecodedIsQR=false;
     onCodeRead(c);
   });
