@@ -2044,6 +2044,28 @@ function _captureActiveTrack(){
       var trackLabel=activeTrack.label||'';
       console.log('[scanner] resolution:',s.width+'x'+s.height,'caps.zoom:',caps.zoom,'label:',trackLabel);
 
+      /* 진단용: 활성 카메라 정보를 화면에 영구 표시 (사용자가 어떤 카메라가 잡혔는지 직접 확인 가능) */
+      var diagInfo='📷 '+(trackLabel||'?')+' | '+s.width+'x'+s.height;
+      if(caps.zoom&&typeof caps.zoom.min==='number'){
+        diagInfo+=' | zoom:'+caps.zoom.min+'~'+(caps.zoom.max||'?');
+      }
+      if(caps.width&&caps.width.max){
+        diagInfo+=' | maxW:'+caps.width.max;
+      }
+      scCamInfoEl.textContent=diagInfo;
+
+      /* localStorage 테스트 - 한 번만 */
+      if(!window._lsTestDone){
+        window._lsTestDone=true;
+        try{
+          var k='SCAN_LS_TEST_'+Date.now();
+          localStorage.setItem(k,'ok');
+          var r=localStorage.getItem(k);
+          localStorage.removeItem(k);
+          console.log('[scanner] localStorage test:',r==='ok'?'OK':'FAIL');
+        }catch(e){console.log('[scanner] localStorage exception:',e.message)}
+      }
+
       /* zoom 1.0 + continuous focus + 최고 해상도 적용 */
       var advConstraint={};
       if(caps.zoom&&typeof caps.zoom.min==='number'){
