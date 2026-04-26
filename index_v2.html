@@ -1773,6 +1773,11 @@ function startScanner(){
   try{sessionId=sessionStorage.getItem('SCAN_CAM_ID_SESSION')||''}catch(e){}
   var sessionLabel='';
   try{sessionLabel=sessionStorage.getItem('SCAN_CAM_LABEL_SESSION')||''}catch(e){}
+  /* 이전 세션의 메인 카메라 (다음 세션 첫 시도 - 라벨 안정적이면 즉시 메인) */
+  var prevId='';
+  try{prevId=localStorage.getItem('SCAN_CAM_PREV_ID')||''}catch(e){}
+  var prevLabel='';
+  try{prevLabel=localStorage.getItem('SCAN_CAM_PREV_LABEL')||''}catch(e){}
 
   if(!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices){
     _startWithFacingMode();return;
@@ -1820,8 +1825,30 @@ function startScanner(){
       }
     }
 
-    /* 3순위 (기본): 매번 라벨 기반 메인 카메라 자동 식별
-       → 새 세션, 첫 진입에서 항상 1x 메인 카메라로 시작 */
+    /* 3순위: 이전 세션 메인 카메라 (localStorage prev) - label 우선 (deviceId는 변경 가능)
+       → 새 세션에서 즉시 메인 카메라로 시작 (라벨 안정적이면) */
+    if(prevLabel){
+      for(var i=0;i<html5Cameras.length;i++){
+        if(html5Cameras[i].label===prevLabel){
+          currentCamIndex=i;
+          try{localStorage.setItem('SCAN_CAM_PREV_ID',html5Cameras[i].id)}catch(e){}
+          console.log('[scanner] prev session main cam matched by label:',html5Cameras[i].label);
+          _startWithCamera(i);return;
+        }
+      }
+    }
+    if(prevId){
+      for(var i=0;i<html5Cameras.length;i++){
+        if(html5Cameras[i].id===prevId){
+          currentCamIndex=i;
+          console.log('[scanner] prev session main cam matched by deviceId:',html5Cameras[i].label);
+          _startWithCamera(i);return;
+        }
+      }
+    }
+
+    /* 4순위 (기본): 매번 라벨 기반 메인 카메라 자동 식별
+       → 첫 진입 또는 매칭 모두 실패 시 사용 */
     var mainIdx=_pickMainCameraIndex(html5Cameras);
     currentCamIndex=mainIdx;
     console.log('[scanner] picked main by label:',html5Cameras[mainIdx].label);
@@ -1956,6 +1983,20 @@ function _captureActiveTrack(){
           }
         }
 
+        /* 활성 카메라 인덱스 정확히 식별 (facingMode로 시작한 경우에도) */
+        var activeIdx=-1;
+        if(activeDeviceId){
+          for(var i=0;i<html5Cameras.length;i++){
+            if(html5Cameras[i].id===activeDeviceId){activeIdx=i;break}
+          }
+        }
+        if(activeIdx<0&&trackLabel){
+          for(var i=0;i<html5Cameras.length;i++){
+            if(html5Cameras[i].label===trackLabel){activeIdx=i;break}
+          }
+        }
+        if(activeIdx<0)activeIdx=currentCamIndex;
+
         /* 광각/망원 회피 (zoom.min 기반) */
         var isWide=caps.zoom&&typeof caps.zoom.min==='number'&&caps.zoom.min<0.99;
         var isTele=caps.zoom&&typeof caps.zoom.min==='number'&&caps.zoom.min>1.01;
@@ -1970,29 +2011,29 @@ function _captureActiveTrack(){
         if((isWide||isTele)&&html5Cameras.length>1){
           var tries=0;
           try{tries=parseInt(sessionStorage.getItem('SCAN_CAM_TRY')||'0')}catch(e){}
-          if(tries<html5Cameras.length){
+          if(tries<html5Cameras.length-1){
             try{sessionStorage.setItem('SCAN_CAM_TRY',(tries+1).toString())}catch(e){}
-            /* 라벨 기반으로 메인 카메라 인덱스 찾아 그것으로 직접 점프 */
-            var mainIdx=_pickMainCameraIndex(html5Cameras);
-            console.log('[scanner] '+(isWide?'wide':'tele')+' detected, jumping to main idx:',mainIdx,'label:',html5Cameras[mainIdx].label);
-            currentCamIndex=mainIdx;
-            try{sessionStorage.setItem('SCAN_CAM_ID_SESSION',html5Cameras[mainIdx].id)}catch(e){}
-            try{sessionStorage.setItem('SCAN_CAM_LABEL_SESSION',html5Cameras[mainIdx].label||'')}catch(e){}
+            /* _pickMainCameraIndex 의존 제거: 활성 카메라 인덱스에서 +1 순차 시도
+               (라벨이 wide/tele 키워드 없는 갤럭시 환경에서 무한 같은 카메라 잡히는 문제 회피) */
+            var nextIdx=(activeIdx+1)%html5Cameras.length;
+            console.log('[scanner] '+(isWide?'wide':'tele')+' detected at idx '+activeIdx+' ('+(html5Cameras[activeIdx]?html5Cameras[activeIdx].label:'?')+'), trying next idx '+nextIdx+' ('+html5Cameras[nextIdx].label+') tries='+(tries+1)+'/'+(html5Cameras.length-1));
+            currentCamIndex=nextIdx;
+            try{sessionStorage.setItem('SCAN_CAM_ID_SESSION',html5Cameras[nextIdx].id)}catch(e){}
+            try{sessionStorage.setItem('SCAN_CAM_LABEL_SESSION',html5Cameras[nextIdx].label||'')}catch(e){}
             restartScanner();
             return;
           }
         }
 
-        /* 메인 카메라 잡힘 → 시도 카운터 리셋 + deviceId 저장
-           (settings.deviceId가 빈 경우엔 라벨 매칭으로 찾은 deviceId 사용) */
+        /* 메인 카메라 잡힘 → 시도 카운터 리셋 + sessionStorage + localStorage prev 저장
+           (localStorage prev: 다음 세션 첫 시도용. 라벨 매칭 안정적이면 즉시 메인 시작 가능) */
         try{sessionStorage.removeItem('SCAN_CAM_TRY')}catch(e){}
-        /* 메인 카메라 잡힘 → 다음 모달 열기 시 같은 카메라 유지를 위해 sessionStorage 갱신
-           (localStorage 사용 안 함: Chrome 세션 격리/deviceId 변동 환경에서 신뢰성 낮음
-            새 세션에서는 startScanner의 라벨 기반 자동 식별이 처리) */
         if(activeDeviceId){
           try{sessionStorage.setItem('SCAN_CAM_ID_SESSION',activeDeviceId)}catch(e){}
           if(trackLabel){try{sessionStorage.setItem('SCAN_CAM_LABEL_SESSION',trackLabel)}catch(e){}}
-          console.log('[scanner] saved main cam:',activeDeviceId,'label:',trackLabel);
+          try{localStorage.setItem('SCAN_CAM_PREV_ID',activeDeviceId)}catch(e){}
+          if(trackLabel){try{localStorage.setItem('SCAN_CAM_PREV_LABEL',trackLabel)}catch(e){}}
+          console.log('[scanner] main cam locked - id:',activeDeviceId,'label:',trackLabel);
         }
       }).catch(function(e){
         console.warn('enumerateDevices fail:',e);
