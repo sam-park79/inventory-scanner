@@ -1893,11 +1893,16 @@ function _scanConfig(useCamId){
     aspectRatio:1.7777,
     disableFlip:true
   };
+  /* 해상도 요청을 useCamId 여부와 무관하게 항상 적용 (이전: useCamId일 때 누락 → 360x640 저화질) */
   if(!useCamId){
-    /* iOS처럼 facingMode 사용 + 해상도 ideal 1920x1080
-       (망원/광각 회피 로직이 있으니 해상도 지정해도 안전, 카메라 앱 수준 화질 확보) */
     cfg.videoConstraints={
       facingMode:'environment',
+      width:{ideal:1920},
+      height:{ideal:1080}
+    };
+  }else{
+    /* deviceId 사용 시에도 해상도 ideal 적용 - 이게 누락되어 360x640으로 저화질이었음 */
+    cfg.videoConstraints={
       width:{ideal:1920},
       height:{ideal:1080}
     };
