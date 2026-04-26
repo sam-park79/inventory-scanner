@@ -242,7 +242,11 @@
       -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
       padding:8px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));text-align:center}
     .sc-hint{font-size:12px;color:var(--text2)}
-    .sc-read{font-size:11px;color:var(--green);margin-top:2px;min-height:15px;font-weight:600}
+    .sc-read{font-size:11px;color:var(--green);margin-top:2px;min-height:15px;font-weight:600;
+      cursor:pointer;padding:8px 14px;border-radius:8px;display:inline-block;
+      -webkit-tap-highlight-color:transparent;transition:background .1s}
+    .sc-read:active{background:rgba(52,211,153,.2)}
+    .sc-read:empty{padding:0}
     .sc-cam-info{display:none}
     .btn-scan-done{margin-top:10px;width:100%;height:52px;border:none;border-radius:14px;
       background:var(--orange);color:#000;font-size:16px;font-weight:700;font-family:var(--font);cursor:pointer;display:none}
@@ -481,7 +485,7 @@
   <div class="sc-guide-wrap" id="scanGuide"><div class="sc-guide"><div class="sc-guide-line"></div></div></div>
   <div class="sc-bottom">
     <div class="sc-hint">바코드를 카메라에 비춰주세요</div>
-    <div class="sc-read" id="scRead"></div>
+    <div class="sc-read" id="scRead" onclick="manualConfirmCode()"></div>
     <div class="sc-cam-info" id="scCamInfo"></div>
     <div class="sc-toggle-wrap" id="scToggleWrap">
       <label class="sc-toggle">
@@ -1332,6 +1336,7 @@ var lastConfirmedTime=0; /* 마지막 확정 시각 (cooldown 관리) */
 var lastDecodeTime=0; /* 마지막 디코드 콜백 시각 (watchdog용) */
 var watchdogTimer=null;
 var recentCodes=[]; /* 최근 5번 디코드 결과 (1D 바코드 빈도 기반 누적용) */
+var pendingCode=''; /* scRead에 표시 중인 코드 (탭하면 수동 확정) */
 var allFormatsMode=false; /* 모든 바코드 형식 인식 모드 */
 
 function getActiveFormats(){
@@ -1372,11 +1377,13 @@ function toggleAllFormats(cb){
     msg=allFormatsMode?'모든 바코드 형식 인식 ON':'기본 형식만 인식 (Code 128, EAN-13)';
   }
   showToast(msg);
-  /* 스캐너 재시작 (새 디코더 적용) */
+  /* 스캐너 재시작은 다음 프레임으로 미룸 (토글 슬라이더 UI가 즉시 화면에 반영되도록)
+     restartScanner의 무거운 작업(Quagga.stop, init/start)이 메인 스레드를 차단해
+     토글 시각 변경이 렉으로 보이는 문제 회피 */
   if(document.getElementById('scannerOverlay').classList.contains('show')){
-    /* iOS도 restartScanner로: stopScanner → startScanner → initIOSScanner 풀 흐름
-       (restartQuagga의 부분적 정리보다 더 안정적) */
-    restartScanner();
+    requestAnimationFrame(function(){
+      requestAnimationFrame(restartScanner);
+    });
   }
 }
 
@@ -1400,7 +1407,7 @@ function openScanner(mode){
   unlockAudio(); /* 사용자 제스처(클릭)로 진입 → audio 강제 unlock */
   scanMode=mode||'search';
   scanned=false;lastCode='';matchCount=0;torchOn=false;lastConfirmedCode='';emptyFrames=0;
-  recentCodes=[]; /* 빈도 누적 리셋 */
+  recentCodes=[];pendingCode=''; /* 빈도 누적 + 수동 확정 후보 리셋 */
   lastDecodeTime=Date.now();
   scReadEl.textContent='';scCamInfoEl.textContent='';
   document.getElementById('btnTorch').classList.remove('active');
@@ -1575,10 +1582,11 @@ function onCodeRead(code){
     /* 1D 바코드: 빈도 기반 누적 (voting) */
     if(!isValidCode(code))return;
     var loc=_voteCode(code);
+    pendingCode=loc.code;
     scReadEl.textContent='✓ '+loc.code+' ('+loc.count+'/'+CONFIRM_COUNT+')';
     if(loc.count>=CONFIRM_COUNT){
       scanned=true;
-      recentCodes=[];
+      recentCodes=[];pendingCode='';
       confirmFeedback();
       document.getElementById('locInput').value=loc.code;
       closeScanner();
@@ -1599,9 +1607,9 @@ function onCodeRead(code){
     var now=Date.now();
     /* 글로벌 cooldown: 직전 인식 1초 내 모든 1D 디코드 차단 (QR은 면제 - 단일 디코더라 안전) */
     if(!lastDecodedIsQR&&lastConfirmedTime&&now-lastConfirmedTime<1000)return;
-    /* 같은 코드 3초 cooldown */
+    /* 같은 코드 2초 cooldown (1D + QR 동일) */
     if(code===lastConfirmedCode){
-      if(now-lastConfirmedTime<3000)return;
+      if(now-lastConfirmedTime<2000)return;
       lastConfirmedCode='';
     }
   }
@@ -1619,9 +1627,10 @@ function onCodeRead(code){
      - 부정확 디코드는 매번 다른 값이라 빈도 낮음 → 자연스럽게 무시됨
      - 17자리/12자리 등 길이 무관하게 빈도 높은 코드가 우선 */
   var v=_voteCode(code);
+  pendingCode=v.code;
   scReadEl.textContent='✓ '+v.code+' ('+v.count+'/'+CONFIRM_COUNT+')';
   if(v.count>=CONFIRM_COUNT){
-    recentCodes=[];
+    recentCodes=[];pendingCode='';
     onScanConfirmed(v.code);
   }
 }
@@ -1641,6 +1650,32 @@ function _voteCode(code){
   return {code:bestCode,count:bestCount};
 }
 
+/* 사용자가 scRead 영역을 탭하면 표시 중인 후보 코드를 즉시 확정 (CONFIRM_COUNT 미달 상태에서 수동 확정) */
+function manualConfirmCode(){
+  if(!pendingCode)return;
+  if(scanned&&scanMode==='search')return;
+  var code=pendingCode;
+  pendingCode='';
+  recentCodes=[];
+
+  /* 위치 모드 수동 확정 */
+  if(scanMode==='location'){
+    if(scanned)return;
+    scanned=true;
+    confirmFeedback();
+    document.getElementById('locInput').value=code;
+    closeScanner();
+    if(historyDepth>0){historyDepth--;skipNextPopstate=true;history.back();}
+    setTimeout(function(){
+      scanMode='search';
+      document.getElementById('locModal').classList.add('show');
+    },100);
+    return;
+  }
+  /* 검색/이동 수동 확정 */
+  onScanConfirmed(code);
+}
+
 function openLocScanner(){
   document.getElementById('locModal').classList.remove('show');
   scanMode='location';
@@ -1658,7 +1693,7 @@ function onScanConfirmed(code){
     /* 스캔 리셋 — 다른 바코드 스캔 가능, 같은 바코드는 3초 cooldown 후 재스캔 가능 */
     lastConfirmedCode=code;
     lastConfirmedTime=Date.now();
-    scanned=false;matchCount=0;recentCodes=[];scReadEl.textContent='';
+    scanned=false;matchCount=0;recentCodes=[];pendingCode='';scReadEl.textContent='';
     return;
   }
 
@@ -1681,12 +1716,12 @@ function startWatchdog(){
     /* 1.5초 이상 디코드 콜백 없음 = 가이드 이탈
        voting/matchCount 누적 리셋 → 다시 들어왔을 때 fresh start */
     if(idle>1500&&recentCodes.length>0){
-      recentCodes=[];
+      recentCodes=[];pendingCode='';
       matchCount=0;lastCode='';
       if(scReadEl)scReadEl.textContent='';
     }
     /* 이동모드: 3초 cooldown 자동 해제 */
-    if(scanMode==='move'&&lastConfirmedCode&&Date.now()-lastConfirmedTime>3000){
+    if(scanMode==='move'&&lastConfirmedCode&&Date.now()-lastConfirmedTime>2000){
       lastConfirmedCode='';
     }
   },500);
