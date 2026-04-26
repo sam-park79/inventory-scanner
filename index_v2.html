@@ -1918,10 +1918,8 @@ function initIOSScanner(){
   document.getElementById('iosScanner').style.display='block';
   document.getElementById('scanGuide').style.display='flex';
 
-  /* 이전 인스턴스 완전 정리 */
+  /* 이전 인스턴스 정리 (Quagga 자체 정리. 핸들러는 유지) */
   try{Quagga.stop()}catch(e){}
-  try{Quagga.offDetected()}catch(e){}
-  try{Quagga.offProcessed()}catch(e){}
   stopIOSQROnly();
   /* 컨테이너 비우기 (이전 video element 제거) */
   document.getElementById('iosScanner').innerHTML='';
@@ -1974,8 +1972,6 @@ function initIOSScanner(){
 function restartQuagga(){
   /* 위치 모드 + 토글 OFF: QR-only 재시작 */
   try{Quagga.stop()}catch(e){}
-  try{Quagga.offDetected()}catch(e){}
-  try{Quagga.offProcessed()}catch(e){}
   stopIOSQROnly();
   /* 컨테이너 비우기 (이전 video element 제거) */
   document.getElementById('iosScanner').innerHTML='';
