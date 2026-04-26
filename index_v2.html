@@ -1403,6 +1403,8 @@ function openScanner(mode){
   scReadEl.textContent='';scCamInfoEl.textContent='';
   document.getElementById('btnTorch').classList.remove('active');
   document.getElementById('scannerOverlay').classList.add('show');
+  /* iOS는 카메라 전환 버튼 비활성 (OS가 후면 자동 선택, deviceId 기반 전환 미지원) */
+  document.getElementById('btnSwitch').style.display=isIOS?'none':'';
 
   /* 스캔 바 애니메이션 거리를 가이드 박스 높이에 맞춰 설정 (GPU 가속) */
   setTimeout(function(){
