@@ -1380,13 +1380,12 @@ function toggleAllFormats(cb){
     msg=allFormatsMode?'모든 바코드 형식 인식 ON':'기본 형식만 인식 (Code 128, EAN-13)';
   }
   showToast(msg);
-  /* 스캐너 재시작은 다음 프레임으로 미룸 (토글 슬라이더 UI가 즉시 화면에 반영되도록)
-     restartScanner의 무거운 작업(Quagga.stop, init/start)이 메인 스레드를 차단해
-     토글 시각 변경이 렉으로 보이는 문제 회피 */
+  /* 카메라 재시작은 60ms 후로 미룸 (토글 슬라이더 transition 0.05s 완료 보장)
+     무거운 작업(Quagga.stop, init/start, video element 재생성)이 메인 스레드를
+     차단해 토글 시각 변경이 늦어 보이는 문제 회피. 위치 모드처럼 모드 전환
+     자체가 무거운 케이스도 커버. */
   if(document.getElementById('scannerOverlay').classList.contains('show')){
-    requestAnimationFrame(function(){
-      requestAnimationFrame(restartScanner);
-    });
+    setTimeout(restartScanner,60);
   }
 }
 
