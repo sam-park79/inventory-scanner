@@ -1872,17 +1872,12 @@ function startIOSQrScan(){
     if(!vid||vid.readyState<2)return;
     var w=vid.videoWidth,h=vid.videoHeight;
     if(!w||!h)return;
-    /* 가이드 박스 영역만 캔버스에 그리기 (화면 96% 너비, 2:1 aspect) */
-    var boxW=Math.floor(w*0.96);
-    var boxH=Math.floor(boxW/2);
-    if(boxH>h*0.9){boxH=Math.floor(h*0.9);boxW=Math.floor(boxH*2)}
-    var sx=Math.floor((w-boxW)/2);
-    var sy=Math.floor((h-boxH)/2);
-    iosQrCanvas.width=boxW;iosQrCanvas.height=boxH;
+    /* 비디오 전체에서 디코드 (cropping이 화면/비디오 비율 차이로 가이드 박스를 벗어나는 문제 회피) */
+    iosQrCanvas.width=w;iosQrCanvas.height=h;
     var ctx=iosQrCanvas.getContext('2d',{willReadFrequently:true});
-    ctx.drawImage(vid,sx,sy,boxW,boxH,0,0,boxW,boxH);
-    var imgData=ctx.getImageData(0,0,boxW,boxH);
-    var qr=jsQR(imgData.data,boxW,boxH,{inversionAttempts:'dontInvert'});
+    ctx.drawImage(vid,0,0,w,h);
+    var imgData=ctx.getImageData(0,0,w,h);
+    var qr=jsQR(imgData.data,w,h,{inversionAttempts:'dontInvert'});
     if(qr&&qr.data){
       if(!qr.location||!qr.location.topLeftCorner)return;
       var loc=qr.location;
@@ -1890,6 +1885,12 @@ function startIOSQrScan(){
       var dy=loc.bottomLeftCorner.y-loc.topLeftCorner.y;
       var qrSize=Math.min(Math.abs(dx),Math.abs(dy));
       if(qrSize<60)return;
+      /* QR 중심이 가이드 박스 영역 안인지 검증 (object-fit:cover 보정 포함) */
+      var qrCx=(loc.topLeftCorner.x+loc.bottomRightCorner.x)/2;
+      var qrCy=(loc.topLeftCorner.y+loc.bottomRightCorner.y)/2;
+      /* 화면 중앙 60% × 60% 영역(가이드 박스 영역 약간 여유) */
+      var marginX=w*0.05,marginY=h*0.20;
+      if(qrCx<marginX||qrCx>w-marginX||qrCy<marginY||qrCy>h-marginY)return;
       lastDecodedIsQR=true;
       onCodeRead(qr.data);
     }
