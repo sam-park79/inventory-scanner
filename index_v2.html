@@ -1957,6 +1957,13 @@ function initIOSScanner(){
     try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
     startIOSQrScan();
   });
+  _attachQuaggaHandlers();
+}
+
+var quaggaHandlersAttached=false;
+function _attachQuaggaHandlers(){
+  if(quaggaHandlersAttached)return; /* 중복 등록 방지 (Quagga onDetected는 array에 누적됨) */
+  quaggaHandlersAttached=true;
   Quagga.onDetected(function(result){
     var c=result.codeResult&&result.codeResult.code;
     if(!c)return;
@@ -1996,12 +2003,14 @@ function restartQuagga(){
               if(err2){startIOSQrScan();return}
               Quagga.start();activeTrack=null;
               try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+              _attachQuaggaHandlers();
               startIOSQrScan();
             });
           return;
         }
         Quagga.start();activeTrack=null;
         try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
+        _attachQuaggaHandlers();
         startIOSQrScan();
       });
     setTimeout(function(){if(!iosQrTimer)startIOSQrScan()},1000);
