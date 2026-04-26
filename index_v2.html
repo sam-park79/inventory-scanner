@@ -1551,9 +1551,9 @@ function switchCamera(){
     return;
   }
   currentCamIndex=(currentCamIndex+1)%allCameras.length;
-  /* deviceId + label 동시 저장 (Chrome이 새 세션에서 deviceId 변경 시 label로 fallback 매칭) */
-  try{localStorage.setItem('SCAN_CAM_ID',allCameras[currentCamIndex].deviceId)}catch(e){}
-  try{localStorage.setItem('SCAN_CAM_LABEL',allCameras[currentCamIndex].label||'')}catch(e){}
+  /* 사용자 명시 선택은 sessionStorage에 저장 (탭 닫으면 정리되어 새 세션엔 항상 메인부터) */
+  try{sessionStorage.setItem('SCAN_CAM_ID_SESSION',allCameras[currentCamIndex].deviceId)}catch(e){}
+  try{sessionStorage.setItem('SCAN_CAM_LABEL_SESSION',allCameras[currentCamIndex].label||'')}catch(e){}
   showToast('카메라 '+(currentCamIndex+1)+'/'+allCameras.length+'로 전환');
   lastCode='';matchCount=0;scReadEl.textContent='';torchOn=false;
   document.getElementById('btnTorch').classList.remove('active');
@@ -1767,11 +1767,13 @@ function startScanner(){
   }
   startWatchdog();
 
-  var savedId='',savedLabel='';
-  try{savedId=localStorage.getItem('SCAN_CAM_ID')||''}catch(e){}
-  try{savedLabel=localStorage.getItem('SCAN_CAM_LABEL')||''}catch(e){}
+  /* 사용자 명시 카메라 전환은 sessionStorage로만 유지 (탭 닫으면 정리)
+     → 새 세션에서는 항상 라벨 기반으로 메인 카메라 자동 식별 */
+  var sessionId='';
+  try{sessionId=sessionStorage.getItem('SCAN_CAM_ID_SESSION')||''}catch(e){}
+  var sessionLabel='';
+  try{sessionLabel=sessionStorage.getItem('SCAN_CAM_LABEL_SESSION')||''}catch(e){}
 
-  /* enumerateDevices 우선 사용 - 권한 있으면 라벨까지 즉시 받아 메인 카메라 식별 가능 */
   if(!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices){
     _startWithFacingMode();return;
   }
@@ -1784,7 +1786,7 @@ function startScanner(){
     });
     if(!backCams.length)backCams=devs.filter(function(d){return d.kind==='videoinput'});
 
-    /* 라벨이 비어있으면 권한 없음 → facingMode로 권한 획득 (그 후 _captureActiveTrack가 처리) */
+    /* 라벨이 비어있으면 권한 없음 → facingMode로 권한 획득 (그 후 _captureActiveTrack에서 처리) */
     var hasLabels=backCams.length>0&&backCams.some(function(d){return d.label});
     if(!hasLabels){
       console.log('[scanner] no permission yet, starting facingMode');
@@ -1794,37 +1796,34 @@ function startScanner(){
     /* 권한 있음 → 카메라 목록 채움 */
     html5Cameras=backCams.map(function(d){return{id:d.deviceId,label:d.label||'카메라'}});
     allCameras=backCams.map(function(d){return{deviceId:d.deviceId,label:d.label||'카메라'}});
-    console.log('[scanner] enumerated '+html5Cameras.length+' cameras, savedId:',savedId,'savedLabel:',savedLabel);
+    console.log('[scanner] enumerated '+html5Cameras.length+' cameras');
 
-    /* 1순위: deviceId 매칭 (같은 세션 또는 deviceId 안정 유지된 경우) */
-    if(savedId){
+    /* 1순위: 같은 세션 내 사용자 선택 (sessionStorage) - deviceId 우선 */
+    if(sessionId){
       for(var i=0;i<html5Cameras.length;i++){
-        if(html5Cameras[i].id===savedId){
+        if(html5Cameras[i].id===sessionId){
           currentCamIndex=i;
-          console.log('[scanner] matched by deviceId:',html5Cameras[i].label);
+          console.log('[scanner] session matched by deviceId:',html5Cameras[i].label);
+          _startWithCamera(i);return;
+        }
+      }
+    }
+    /* 2순위: 같은 세션 내 사용자 선택 (sessionStorage) - label fallback */
+    if(sessionLabel){
+      for(var i=0;i<html5Cameras.length;i++){
+        if(html5Cameras[i].label===sessionLabel){
+          currentCamIndex=i;
+          try{sessionStorage.setItem('SCAN_CAM_ID_SESSION',html5Cameras[i].id)}catch(e){}
+          console.log('[scanner] session matched by label:',html5Cameras[i].label);
           _startWithCamera(i);return;
         }
       }
     }
 
-    /* 2순위: label 매칭 (Chrome 새 세션에서 deviceId 변경된 경우 fallback) */
-    if(savedLabel){
-      for(var i=0;i<html5Cameras.length;i++){
-        if(html5Cameras[i].label===savedLabel){
-          currentCamIndex=i;
-          /* 새 deviceId로 갱신 */
-          try{localStorage.setItem('SCAN_CAM_ID',html5Cameras[i].id)}catch(e){}
-          console.log('[scanner] matched by label, deviceId updated:',html5Cameras[i].label);
-          _startWithCamera(i);return;
-        }
-      }
-    }
-
-    /* 3순위: 라벨 기반 메인 카메라 식별 → 메인으로 시작 + 저장 */
+    /* 3순위 (기본): 매번 라벨 기반 메인 카메라 자동 식별
+       → 새 세션, 첫 진입에서 항상 1x 메인 카메라로 시작 */
     var mainIdx=_pickMainCameraIndex(html5Cameras);
     currentCamIndex=mainIdx;
-    try{localStorage.setItem('SCAN_CAM_ID',html5Cameras[mainIdx].id)}catch(e){}
-    try{localStorage.setItem('SCAN_CAM_LABEL',html5Cameras[mainIdx].label||'')}catch(e){}
     console.log('[scanner] picked main by label:',html5Cameras[mainIdx].label);
     _startWithCamera(mainIdx);
   }).catch(function(e){
@@ -1977,8 +1976,8 @@ function _captureActiveTrack(){
             var mainIdx=_pickMainCameraIndex(html5Cameras);
             console.log('[scanner] '+(isWide?'wide':'tele')+' detected, jumping to main idx:',mainIdx,'label:',html5Cameras[mainIdx].label);
             currentCamIndex=mainIdx;
-            try{localStorage.setItem('SCAN_CAM_ID',html5Cameras[mainIdx].id)}catch(e){}
-            try{localStorage.setItem('SCAN_CAM_LABEL',html5Cameras[mainIdx].label||'')}catch(e){}
+            try{sessionStorage.setItem('SCAN_CAM_ID_SESSION',html5Cameras[mainIdx].id)}catch(e){}
+            try{sessionStorage.setItem('SCAN_CAM_LABEL_SESSION',html5Cameras[mainIdx].label||'')}catch(e){}
             restartScanner();
             return;
           }
@@ -1987,9 +1986,12 @@ function _captureActiveTrack(){
         /* 메인 카메라 잡힘 → 시도 카운터 리셋 + deviceId 저장
            (settings.deviceId가 빈 경우엔 라벨 매칭으로 찾은 deviceId 사용) */
         try{sessionStorage.removeItem('SCAN_CAM_TRY')}catch(e){}
+        /* 메인 카메라 잡힘 → 다음 모달 열기 시 같은 카메라 유지를 위해 sessionStorage 갱신
+           (localStorage 사용 안 함: Chrome 세션 격리/deviceId 변동 환경에서 신뢰성 낮음
+            새 세션에서는 startScanner의 라벨 기반 자동 식별이 처리) */
         if(activeDeviceId){
-          try{localStorage.setItem('SCAN_CAM_ID',activeDeviceId)}catch(e){}
-          if(trackLabel){try{localStorage.setItem('SCAN_CAM_LABEL',trackLabel)}catch(e){}}
+          try{sessionStorage.setItem('SCAN_CAM_ID_SESSION',activeDeviceId)}catch(e){}
+          if(trackLabel){try{sessionStorage.setItem('SCAN_CAM_LABEL_SESSION',trackLabel)}catch(e){}}
           console.log('[scanner] saved main cam:',activeDeviceId,'label:',trackLabel);
         }
       }).catch(function(e){
