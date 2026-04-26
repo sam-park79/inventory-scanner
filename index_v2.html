@@ -1635,21 +1635,14 @@ var html5Cameras=[]; /* {id,label} 형식 */
 
 function startWatchdog(){
   stopWatchdog();
-  /* 500ms 동안 디코드 콜백이 없으면 누적 카운터 리셋 (다른 코드 인식 방해 방지) */
+  /* v1 호환: matchCount 리셋 비활성화 (인식 흐름 방해 방지)
+     이동모드 cooldown 자동 해제만 유지 */
   watchdogTimer=setInterval(function(){
-    if(scanned&&scanMode==='search')return;
-    var idle=Date.now()-lastDecodeTime;
-    if(idle>500){
-      if(matchCount>0||lastCode){
-        matchCount=0;lastCode='';
-        scReadEl.textContent='';
-      }
-    }
-    /* 이동모드: cooldown 체크는 idle과 무관하게 */
+    /* 이동모드: 3초 cooldown 자동 해제 */
     if(scanMode==='move'&&lastConfirmedCode&&Date.now()-lastConfirmedTime>3000){
       lastConfirmedCode='';
     }
-  },200);
+  },500);
 }
 
 function stopWatchdog(){
@@ -1878,13 +1871,13 @@ function initIOSQROnly(){
   container.appendChild(video);
 
   navigator.mediaDevices.getUserMedia({
-    video:{facingMode:{exact:'environment'},width:{ideal:1920,min:1280},height:{ideal:1080,min:720}},
+    video:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}},
     audio:false
   })
   .catch(function(){
     /* fallback: loose */
     return navigator.mediaDevices.getUserMedia({
-      video:{facingMode:'environment',width:{ideal:1920,min:1280},height:{ideal:1080,min:720}},
+      video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}},
       audio:false
     });
   })
@@ -1937,18 +1930,18 @@ function initIOSScanner(){
     return;
   }
 
-  Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'25%',right:'2%',left:'2%',bottom:'25%'},
-    constraints:{facingMode:{exact:'environment'},width:{ideal:1920,min:1280},height:{ideal:1080,min:720}}},
-    decoder:{readers:getActiveReaders(),multiple:false},
-    locator:{patchSize:'large',halfSample:false},locate:true,frequency:15,numOfWorkers:0
+  Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
+    constraints:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}}},
+    decoder:{readers:getActiveReaders()},
+    locate:true,frequency:10,numOfWorkers:0
   },function(err){
     if(err){
       console.warn('exact environment failed, retrying loose:',err);
       /* fallback: loose environment */
-      Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'25%',right:'2%',left:'2%',bottom:'25%'},
-        constraints:{facingMode:'environment',width:{ideal:1920,min:1280},height:{ideal:1080,min:720}}},
-        decoder:{readers:getActiveReaders(),multiple:false},
-        locator:{patchSize:'large',halfSample:false},locate:true,frequency:15,numOfWorkers:0
+      Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
+        constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
+        decoder:{readers:getActiveReaders()},
+        locate:true,frequency:10,numOfWorkers:0
       },function(err2){
         if(err2){console.error('Quagga init fail:',err2);return}
         Quagga.start();
@@ -1989,16 +1982,16 @@ function restartQuagga(){
       initIOSQROnly();
       return;
     }
-    Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'25%',right:'2%',left:'2%',bottom:'25%'},
-      constraints:{facingMode:{exact:'environment'},width:{ideal:1920,min:1280},height:{ideal:1080,min:720}}},
-      decoder:{readers:getActiveReaders(),multiple:false},
-      locator:{patchSize:'large',halfSample:false},locate:true,frequency:15,numOfWorkers:0},function(err){
+    Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
+      constraints:{facingMode:{exact:'environment'},width:{ideal:1280},height:{ideal:720}}},
+      decoder:{readers:getActiveReaders()},
+      locate:true,frequency:10,numOfWorkers:0},function(err){
         if(err){
           /* fallback: loose */
-          Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),area:{top:'25%',right:'2%',left:'2%',bottom:'25%'},
-            constraints:{facingMode:'environment',width:{ideal:1920,min:1280},height:{ideal:1080,min:720}}},
-            decoder:{readers:getActiveReaders(),multiple:false},
-            locator:{patchSize:'large',halfSample:false},locate:true,frequency:15,numOfWorkers:0},function(err2){
+          Quagga.init({inputStream:{type:'LiveStream',target:document.getElementById('iosScanner'),
+            constraints:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}}},
+            decoder:{readers:getActiveReaders()},
+            locate:true,frequency:10,numOfWorkers:0},function(err2){
               if(err2){startIOSQrScan();return}
               Quagga.start();activeTrack=null;
               try{var v=document.querySelector('#iosScanner video');if(v&&v.srcObject)activeTrack=v.srcObject.getVideoTracks()[0]}catch(e){}
