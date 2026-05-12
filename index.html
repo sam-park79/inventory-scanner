@@ -26,13 +26,13 @@
       --radius:14px;--font:'Noto Sans KR',system-ui,-apple-system,sans-serif}
     html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);
       font-size:15px;line-height:1.5;overflow:hidden;
-      padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
       /* iOS overscroll(elastic scroll) 차단: body는 절대 스크롤 안 됨, .results만 스크롤 */
       position:fixed;width:100%;
       overscroll-behavior:none;-webkit-overflow-scrolling:auto}
 
     .app{display:flex;flex-direction:column;height:100dvh;height:100vh;max-width:520px;margin:0 auto;background:var(--bg);overflow:hidden}
-    .header{padding:14px 16px 10px;background:var(--bg);position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border);flex-shrink:0}
+    /* safe-area는 헤더에만 적용 (body 패딩으로 인한 상단 빈 공간 방지) */
+    .header{padding:calc(14px + env(safe-area-inset-top)) 16px 10px;background:var(--bg);position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border);flex-shrink:0}
     .header-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
     .header h1{font-size:18px;font-weight:700;letter-spacing:-.3px;flex-shrink:0}
     .header-btns{display:flex;gap:10px}
