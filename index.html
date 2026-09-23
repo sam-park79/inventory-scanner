@@ -1435,7 +1435,21 @@ function isValidCode(code){
   }
   /* 1D 바코드: 토글 ON은 12자 이상 영숫자 (짧은 부정확 디코드 차단), 토글 OFF는 정확히 13자리 숫자 */
   if(allFormatsMode)return code.length>=12&&/^[A-Za-z0-9_\-]+$/.test(code);
-  return /^\d{13}$/.test(code);
+  /* 토글 OFF: 13자리 숫자 + EAN-13 체크섬 검증
+     (code_128 등이 EAN-13을 잘못 디코드해 정상 13자리로 나와도 체크섬 실패로 차단) */
+  if(!/^\d{13}$/.test(code))return false;
+  return _validateEAN13Checksum(code);
+}
+
+/* EAN-13 체크섬 검증: 앞 12자리로 계산한 체크숫자가 마지막 자리와 일치하는지 */
+function _validateEAN13Checksum(code){
+  var sum=0;
+  for(var i=0;i<12;i++){
+    var d=parseInt(code.charAt(i));
+    sum+=(i%2===0)?d:d*3;
+  }
+  var checksum=(10-(sum%10))%10;
+  return checksum===parseInt(code.charAt(12));
 }
 
 function toggleAllFormats(cb){
@@ -2448,13 +2462,16 @@ function getActiveReaders(){
     /* 위치 모드: 토글 ON이어도 reader 단순화 (여러 reader가 같은 바코드를
        다른 코드로 디코드해 CONFIRM_COUNT 누적을 방해하는 문제 차단) */
     if(scanMode==='location'){
-      return ['code_128_reader','ean_reader'];
+      return ['ean_reader','code_128_reader'];
     }
-    /* ean_8/upc_e 제외 (긴 바코드 일부를 8자리로 잘못 디코드해 정확한 결과 누적 방해)
-       i2of5/codabar 제외 (오인식 빈번) */
-    return ['code_128_reader','ean_reader','code_39_reader','upc_reader'];
+    /* ean_reader를 먼저 배치 - EAN-13 바코드가 code_128 등으로 오인식되는 것 방지
+       (예: 6445000078965 → code_128이 040...으로 잘못 디코드하는 문제) */
+    return ['ean_reader','code_128_reader','code_39_reader','upc_reader'];
   }
-  return ['code_128_reader','ean_reader'];
+  /* 토글 OFF: ean_reader만 사용 (13자리 숫자 바코드는 EAN-13 하나로 충분)
+     code_128_reader가 EAN-13 앞자리(644 등)를 시작 마커로 오인식해
+     6445000078965 → 040... 형태로 잘못 디코드하는 문제 원천 차단 */
+  return ['ean_reader'];
 }
 
 function initIOSScanner(){
