@@ -1435,21 +1435,9 @@ function isValidCode(code){
   }
   /* 1D 바코드: 토글 ON은 12자 이상 영숫자 (짧은 부정확 디코드 차단), 토글 OFF는 정확히 13자리 숫자 */
   if(allFormatsMode)return code.length>=12&&/^[A-Za-z0-9_\-]+$/.test(code);
-  /* 토글 OFF: 13자리 숫자 + EAN-13 체크섬 검증
-     (code_128 등이 EAN-13을 잘못 디코드해 정상 13자리로 나와도 체크섬 실패로 차단) */
-  if(!/^\d{13}$/.test(code))return false;
-  return _validateEAN13Checksum(code);
-}
-
-/* EAN-13 체크섬 검증: 앞 12자리로 계산한 체크숫자가 마지막 자리와 일치하는지 */
-function _validateEAN13Checksum(code){
-  var sum=0;
-  for(var i=0;i<12;i++){
-    var d=parseInt(code.charAt(i));
-    sum+=(i%2===0)?d:d*3;
-  }
-  var checksum=(10-(sum%10))%10;
-  return checksum===parseInt(code.charAt(12));
+  /* 토글 OFF: 정확히 13자리 숫자 (Code 128 13자리도 통과해야 하므로 EAN 체크섬은 여기서 검사하지 않음.
+     EAN-13은 자체 디코더(_eanDecodeRuns)가 체크섬까지 검증) */
+  return /^\d{13}$/.test(code);
 }
 
 function toggleAllFormats(cb){
@@ -2364,6 +2352,120 @@ function restartScanner(){
 }
 
 /* ── iOS: QuaggaJS + jsQR ── */
+/* ── iOS 전용 EAN-13 디코더 (바 두께 보정) ──
+   원인: 태그 프린터 인쇄 바가 규격보다 얇음(약 0.5모듈) → QuaggaJS ean_reader가
+   G패턴 숫자를 L패턴으로 오인식. 6445000078965 → 0401200078965 로 읽히고
+   이 잘못된 값이 우연히 체크섬까지 통과해 그대로 확정됨.
+   해결: 시작/중간/끝 가드바로 바 두께 편차를 측정해 보정한 뒤 패턴 매칭.
+   체크섬 + 패리티 패턴 + 가드 검증을 모두 통과해야만 결과 반환 */
+var EAN_LW=[[3,2,1,1],[2,2,2,1],[2,1,2,2],[1,4,1,1],[1,1,3,2],[1,2,3,1],[1,1,1,4],[1,3,1,2],[1,2,1,3],[3,1,1,2]];
+var EAN_FIRST={LLLLLL:0,LLGLGG:1,LLGGLG:2,LLGGGL:3,LGLLGG:4,LGGLLG:5,LGGGLL:6,LGLGLG:7,LGLGGL:8,LGGLGL:9};
+var EAN_ERR_MAX=1.6;
+
+function _eanChecksumOK(c){
+  var s=0;
+  for(var i=0;i<12;i++)s+=(c.charCodeAt(i)-48)*(i%2===0?1:3);
+  return (10-s%10)%10===(c.charCodeAt(12)-48);
+}
+
+/* 문자 1개(4요소) 매칭. barFirst: 오른쪽(R)은 바부터, 왼쪽(L/G)은 스페이스부터 */
+function _eanMatch(wd,off,barFirst,delta,allowG){
+  var w=[0,0,0,0],tot=0,i;
+  for(i=0;i<4;i++){
+    var isBar=barFirst?(i%2===0):(i%2===1);
+    w[i]=wd[off+i]+(isBar?-delta:delta);
+    tot+=w[i];
+  }
+  if(tot<=0)return null;
+  for(i=0;i<4;i++)w[i]=w[i]*7/tot;
+  var best=null;
+  for(var d=0;d<10;d++){
+    var p=EAN_LW[d];
+    var e=Math.abs(w[0]-p[0])+Math.abs(w[1]-p[1])+Math.abs(w[2]-p[2])+Math.abs(w[3]-p[3]);
+    if(!best||e<best.e)best={d:d,g:false,e:e};
+    if(allowG){
+      var eg=Math.abs(w[0]-p[3])+Math.abs(w[1]-p[2])+Math.abs(w[2]-p[1])+Math.abs(w[3]-p[0]);
+      if(eg<best.e)best={d:d,g:true,e:eg};
+    }
+  }
+  return best;
+}
+
+/* run 배열(bar 여부, 폭)에서 59요소 EAN-13 구간 탐색 */
+function _eanDecodeRuns(bar,wd,n){
+  var G=[0,1,2,27,28,29,30,31,56,57,58];
+  for(var s=0;s+59<=n;s++){
+    if(!bar[s])continue;
+    var total=0,i;
+    for(i=0;i<59;i++)total+=wd[s+i];
+    var mod=total/95,bad=false;
+    for(i=0;i<G.length;i++){var g=wd[s+G[i]];if(g>mod*2.6||g<mod*0.2){bad=true;break}}
+    if(bad)continue;
+    var gb=(wd[s]+wd[s+2]+wd[s+28]+wd[s+30]+wd[s+56]+wd[s+58])/6;
+    var gs=(wd[s+1]+wd[s+27]+wd[s+29]+wd[s+31]+wd[s+57])/5;
+    var delta=(gb-gs)/2; /* 음수 = 바가 얇게 인쇄됨 */
+    var par='',digits='',ok=true,m,k;
+    for(k=0;k<6;k++){
+      m=_eanMatch(wd,s+3+k*4,false,delta,true);
+      if(!m||m.e>EAN_ERR_MAX){ok=false;break}
+      par+=m.g?'G':'L';digits+=m.d;
+    }
+    if(!ok||!(par in EAN_FIRST))continue;
+    for(k=0;k<6;k++){
+      m=_eanMatch(wd,s+32+k*4,true,delta,false);
+      if(!m||m.e>EAN_ERR_MAX){ok=false;break}
+      digits+=m.d;
+    }
+    if(!ok)continue;
+    var code=EAN_FIRST[par]+digits;
+    if(_eanChecksumOK(code))return code;
+  }
+  return null;
+}
+
+/* 한 줄(그레이 값 배열) 디코드: 적응형 임계값 → run 추출 → 정방향/역방향 */
+function _eanDecodeRow(row,w){
+  var win=Math.max(15,Math.floor(w/12));
+  var bar=[],wd=[],cur=-1,cnt=0;
+  for(var x=0;x<w;x++){
+    var a=x-win<0?0:x-win,b=x+win>w?w:x+win,mn=255,mx=0;
+    for(var j=a;j<b;j++){var v=row[j];if(v<mn)mn=v;if(v>mx)mx=v}
+    var bit=(mx-mn<25)?0:(row[x]<(mx+mn)/2?1:0);
+    if(bit===cur)cnt++;
+    else{if(cur>=0){bar.push(cur);wd.push(cnt)}cur=bit;cnt=1}
+  }
+  bar.push(cur);wd.push(cnt);
+  var n=bar.length;
+  if(n<59)return null;
+  var r=_eanDecodeRuns(bar,wd,n);
+  if(r)return r;
+  bar.reverse();wd.reverse(); /* 라벨이 거꾸로(180도)인 경우 */
+  return _eanDecodeRuns(bar,wd,n);
+}
+
+/* RGBA 프레임의 세로 yFrom~yTo 비율 구간을 여러 줄 스캔 */
+function _scanEAN13Frame(data,w,h,yFrom,yTo){
+  var y0=Math.max(1,Math.floor(h*yFrom)),y1=Math.min(h-2,Math.floor(h*yTo));
+  var step=Math.max(4,Math.floor((y1-y0)/14));
+  var row=new Float32Array(w);
+  for(var y=y0;y<y1;y+=step){
+    for(var x=0;x<w;x++){
+      var s=0;
+      for(var dy=-1;dy<=1;dy++){
+        var p=((y+dy)*w+x)*4;
+        s+=data[p]*0.299+data[p+1]*0.587+data[p+2]*0.114;
+      }
+      row[x]=s/3;
+    }
+    var code=_eanDecodeRow(row,w);
+    if(code)return code;
+  }
+  return null;
+}
+
+/* 자체 EAN 디코더 사용 여부: 위치모드+토글OFF(QR 전용)만 제외 */
+function _iosEanEnabled(){return !(scanMode==='location'&&!allFormatsMode)}
+
 var iosQrTimer=null;
 var iosQrCanvas=null;
 
@@ -2381,6 +2483,15 @@ function startIOSQrScan(){
     var ctx=iosQrCanvas.getContext('2d',{willReadFrequently:true});
     ctx.drawImage(vid,0,0,w,h);
     var imgData=ctx.getImageData(0,0,w,h);
+    /* EAN-13: 바 두께 보정 자체 디코더 (가이드 박스 세로 30~70% 구간 스캔) */
+    if(_iosEanEnabled()&&Date.now()-lastJsQRTime>=500){
+      var ean=_scanEAN13Frame(imgData.data,w,h,0.30,0.70);
+      if(ean){
+        lastDecodedIsQR=false;
+        onCodeRead(ean);
+        return; /* 바코드가 잡힌 프레임은 QR 디코드 생략 */
+      }
+    }
     var qr=jsQR(imgData.data,w,h,{inversionAttempts:'dontInvert'});
     if(qr&&qr.data){
       if(!qr.location||!qr.location.topLeftCorner)return;
@@ -2462,16 +2573,14 @@ function getActiveReaders(){
     /* 위치 모드: 토글 ON이어도 reader 단순화 (여러 reader가 같은 바코드를
        다른 코드로 디코드해 CONFIRM_COUNT 누적을 방해하는 문제 차단) */
     if(scanMode==='location'){
-      return ['ean_reader','code_128_reader'];
+      return ['code_128_reader','ean_reader'];
     }
-    /* ean_reader를 먼저 배치 - EAN-13 바코드가 code_128 등으로 오인식되는 것 방지
-       (예: 6445000078965 → code_128이 040...으로 잘못 디코드하는 문제) */
-    return ['ean_reader','code_128_reader','code_39_reader','upc_reader'];
+    return ['code_128_reader','ean_reader','code_39_reader','upc_reader'];
   }
-  /* 토글 OFF: ean_reader만 사용 (13자리 숫자 바코드는 EAN-13 하나로 충분)
-     code_128_reader가 EAN-13 앞자리(644 등)를 시작 마커로 오인식해
-     6445000078965 → 040... 형태로 잘못 디코드하는 문제 원천 차단 */
-  return ['ean_reader'];
+  /* 토글 OFF: Code 128 + EAN-13
+     ※ EAN/UPC 계열 결과는 Quagga 값을 쓰지 않고 자체 보정 디코더(_scanEAN13Frame) 결과를 사용
+       (_attachQuaggaHandlers 참고) */
+  return ['code_128_reader','ean_reader'];
 }
 
 function initIOSScanner(){
@@ -2529,6 +2638,10 @@ function _attachQuaggaHandlers(){
     if(Date.now()-lastJsQRTime<500)return;
     var c=result.codeResult&&result.codeResult.code;
     if(!c)return;
+    /* EAN/UPC 계열은 Quagga 결과 무시 → 자체 보정 디코더가 처리
+       (얇게 인쇄된 태그에서 Quagga가 6445000078965를 0401200078965로 오인식, 체크섬도 우연히 통과) */
+    var fmt=(result.codeResult&&result.codeResult.format)||'';
+    if(/^(ean|upc)/.test(fmt))return;
     if(c.length<12)return; /* 12자 미만 디코드는 짧은 부정확 결과 가능성 높음 */
     lastDecodedIsQR=false;
     onCodeRead(c);
