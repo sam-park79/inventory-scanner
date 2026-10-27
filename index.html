@@ -2900,17 +2900,19 @@ function doConsign(){
     var rows='';
     rows+='<div class="result-row loc"><span class="rlabel">위탁처</span><span class="rvalue">'+esc(dest)+'</span></div>';
     rows+='<div class="result-row loc"><span class="rlabel">출고일</span><span class="rvalue">'+esc(date)+'</span></div>';
-    rows+='<div class="result-row req"><span class="rlabel">요청</span><span class="rvalue">'+req+'건</span></div>';
-    rows+='<div class="result-row ok"><span class="rlabel">처리</span><span class="rvalue">'+sc.length+'건 <span class="detail-link" onclick="toggleDetail(\'okDetail\')">상세보기</span></span></div>';
+    /* 요청/처리/실패: n종 · m개 형식 (수량은 스캔 목록 기준) */
+    var reqCodes=items.map(function(it){return it.code});
+    rows+='<div class="result-row req"><span class="rlabel">요청</span><span class="rvalue">'+_resultCount(reqCodes)+'</span></div>';
+    rows+='<div class="result-row ok"><span class="rlabel">처리</span><span class="rvalue">'+_resultCount(sc)+' <span class="detail-link" onclick="toggleDetail(\'okDetail\')">상세보기</span></span></div>';
     if(fc.length>0){
-      rows+='<div class="result-row fail"><span class="rlabel">실패</span><span class="rvalue">'+fc.length+'건 <span class="detail-link" onclick="toggleDetail(\'failDetail\')">상세보기</span></span></div>';
+      rows+='<div class="result-row fail"><span class="rlabel">실패</span><span class="rvalue">'+_resultCount(fc)+' <span class="detail-link" onclick="toggleDetail(\'failDetail\')">상세보기</span></span></div>';
     }
     document.getElementById('resultRows').innerHTML=rows;
 
     var detail='';
-    detail+='<div class="detail-section" id="okDetail"><div class="dt">처리 완료 품목코드</div><div class="dc">'+(sc.length>0?sc.join('<br>'):'없음')+'</div></div>';
+    detail+='<div class="detail-section" id="okDetail"><div class="dt">처리 완료 품목코드</div><div class="dc">'+_resultList(sc)+'</div></div>';
     if(fc.length>0){
-      detail+='<div class="detail-section fail-detail" id="failDetail"><div class="dt">미등록 품목코드</div><div class="dc">'+fc.join('<br>')+'</div></div>';
+      detail+='<div class="detail-section fail-detail" id="failDetail"><div class="dt">미등록 품목코드</div><div class="dc">'+_resultList(fc)+'</div></div>';
     }
     document.getElementById('resultDetail').innerHTML=detail;
 
@@ -2925,6 +2927,20 @@ function doConsign(){
 }
 
 function closeLocModal(){document.getElementById('locModal').classList.remove('show')}
+
+/* ── 결과 팝업 표시 헬퍼 (종·개 병기) ──
+   수량은 스캔 목록(moveScannedItems) 기준. 목록에 없으면 1개로 계산 */
+function _resultQty(code){return moveScannedItems[code]||1}
+function _resultCount(codes){
+  var t=0;for(var i=0;i<codes.length;i++)t+=_resultQty(codes[i]);
+  return codes.length+'종 · '+t+'개';
+}
+function _resultList(codes){
+  if(!codes.length)return '없음';
+  var out=[];
+  for(var i=0;i<codes.length;i++)out.push(esc(codes[i])+' × '+_resultQty(codes[i]));
+  return out.join('<br>');
+}
 
 function executeMove(){/* 하단 래퍼에서 대체 */}
 /* ══════════════════════════════════════
@@ -3047,17 +3063,19 @@ executeMove=function(){
 
     var rows='';
     if(!isDelete)rows+='<div class="result-row loc"><span class="rlabel">위치</span><span class="rvalue">'+esc(res.location)+'</span></div>';
-    rows+='<div class="result-row req"><span class="rlabel">요청</span><span class="rvalue">'+req+'건</span></div>';
-    rows+='<div class="result-row ok"><span class="rlabel">처리</span><span class="rvalue">'+sc.length+'건 <span class="detail-link" onclick="toggleDetail(\'okDetail\')">상세보기</span></span></div>';
+    /* 요청/처리/실패: n종 · m개 형식 (상품 이동은 위치만 바꾸므로 수량은 스캔 수량) */
+    var reqCodes=items.map(function(it){return it.code});
+    rows+='<div class="result-row req"><span class="rlabel">요청</span><span class="rvalue">'+_resultCount(reqCodes)+'</span></div>';
+    rows+='<div class="result-row ok"><span class="rlabel">처리</span><span class="rvalue">'+_resultCount(sc)+' <span class="detail-link" onclick="toggleDetail(\'okDetail\')">상세보기</span></span></div>';
     if(fc.length>0){
-      rows+='<div class="result-row fail"><span class="rlabel">실패</span><span class="rvalue">'+fc.length+'건 <span class="detail-link" onclick="toggleDetail(\'failDetail\')">상세보기</span></span></div>';
+      rows+='<div class="result-row fail"><span class="rlabel">실패</span><span class="rvalue">'+_resultCount(fc)+' <span class="detail-link" onclick="toggleDetail(\'failDetail\')">상세보기</span></span></div>';
     }
     document.getElementById('resultRows').innerHTML=rows;
 
     var detail='';
-    detail+='<div class="detail-section" id="okDetail"><div class="dt">처리 완료 품목코드</div><div class="dc">'+(sc.length>0?sc.join('<br>'):'없음')+'</div></div>';
+    detail+='<div class="detail-section" id="okDetail"><div class="dt">처리 완료 품목코드</div><div class="dc">'+_resultList(sc)+'</div></div>';
     if(fc.length>0){
-      detail+='<div class="detail-section fail-detail" id="failDetail"><div class="dt">실패 품목코드 (Data/Data2에 없음)</div><div class="dc">'+fc.join('<br>')+'</div></div>';
+      detail+='<div class="detail-section fail-detail" id="failDetail"><div class="dt">실패 품목코드 (Data/Data2에 없음)</div><div class="dc">'+_resultList(fc)+'</div></div>';
     }
     document.getElementById('resultDetail').innerHTML=detail;
 
