@@ -681,6 +681,7 @@ function loadData(forceRefresh){
     if(ic)ic.style.display='';
     if(tt)tt.textContent='검색어를 입력하세요';
     if(dc)dc.innerHTML='품목코드 일부 또는 품목명으로 검색<br>📷 바코드 스캔도 가능합니다';
+    loadDoneFeedback(); /* 로딩 완료 알림 (소리 + 진동) */
   }).catch(function(){dataLoading=false;dataStatusEl.textContent='서버 연결 실패';dataStatusEl.className='data-status er'});
 }
 loadData();
@@ -1364,6 +1365,23 @@ function playBeep(){
     o2.type='square';o2.frequency.value=1600;g2.gain.value=1.0;
     o2.connect(g2);g2.connect(audioCtx.destination);o2.start(t+0.18);o2.stop(t+0.35);
   }catch(e){}
+}
+
+/* 데이터 로딩 완료 알림: 진동(짧게 두 번) + 비프음
+   - unlockAudio()는 호출하지 않음: 터치 없이 호출하면 audioUnlocked만 true가 되어
+     이후 실제 터치 때 iOS 오디오 잠금 해제가 건너뛰어짐
+   - 브라우저가 터치 전 소리/진동을 막은 경우에는 조용히 생략 */
+function loadDoneFeedback(){
+  if(window.navigator&&typeof window.navigator.vibrate==='function'){
+    try{window.navigator.vibrate([120,80,120])}catch(e){}
+  }
+  if(isIOS){playBeep();return} /* 터치 전이면 playBeep 내부에서 생략됨 */
+  if(!audioCtx)return;
+  if(audioCtx.state==='suspended'){
+    /* 재개가 1초 안에 될 때만 재생 (한참 뒤 첫 터치 때 뒤늦게 울리는 것 방지) */
+    var t0=Date.now();
+    audioCtx.resume().then(function(){if(Date.now()-t0<1000)playBeep()}).catch(function(){});
+  }else playBeep();
 }
 
 var lastFeedbackTime=0;
