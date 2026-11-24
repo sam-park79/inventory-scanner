@@ -133,6 +133,48 @@
     .card-head .loc-tag{font-size:11px;font-weight:600;color:var(--orange);background:rgba(251,191,36,.12);padding:2px 8px;border-radius:6px}
     .card-head .total{font-size:12px;font-weight:600;color:var(--green);margin-left:auto}
     .card-body{padding:10px 14px 12px;display:flow-root}
+    /* ── 상품 정보 수정 ── */
+    .card-head .edit-btn{margin-left:auto;font-size:12px;font-weight:700;color:#ff4fd8;padding:2px 8px;border-radius:6px;
+      background:rgba(255,79,216,.1);cursor:pointer;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+    .card-head .edit-btn:active{background:rgba(255,79,216,.3)}
+    .card-head .edit-btn + .total{margin-left:8px}
+    .ed-warn{font-size:13px;color:#ffb4ec;background:rgba(255,79,216,.08);border:1px solid rgba(255,79,216,.3);
+      border-radius:10px;padding:10px 12px;line-height:1.55;margin-bottom:14px}
+    .ed-pin{width:100%;height:52px;border:1.5px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);
+      font-size:22px;font-family:inherit;text-align:center;letter-spacing:10px;outline:none;-webkit-text-security:disc}
+    .ed-pin:focus{border-color:#ff4fd8}
+    .ed-err{min-height:18px;margin-top:8px;font-size:12px;color:var(--red);text-align:center}
+    .ed-btns{display:flex;gap:8px;margin-top:12px}
+    .ed-btns button{flex:1;height:46px;border:none;border-radius:12px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer}
+    .ed-cancel{background:var(--surface);color:var(--text)}
+    .ed-ok{background:#ff4fd8;color:#fff}
+    .ed-ok:disabled{opacity:.35}
+    .ed-bg{position:fixed;inset:0;z-index:320;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;padding:14px}
+    .ed-bg.show{display:flex}
+    .ed-box{background:var(--card);border:1px solid var(--border);border-radius:18px;width:100%;max-width:440px;max-height:92vh;max-height:92dvh;
+      display:flex;flex-direction:column}
+    .ed-hd{padding:16px 18px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
+    .ed-hd h3{font-size:17px;font-weight:700;margin:0 0 8px}
+    .ed-code{display:inline-block;font-size:12px;font-weight:600;color:var(--accent);background:rgba(79,140,255,.12);padding:2px 8px;border-radius:6px}
+    .ed-src{font-size:11px;color:var(--text2);margin-left:6px}
+    .ed-bd{padding:14px 18px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+      display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
+    .ed-f{display:flex;flex-direction:column;gap:4px;min-width:0}
+    .ed-f.full{grid-column:1/-1}
+    .ed-f label{font-size:11px;font-weight:600;color:var(--text2)}
+    .ed-in{width:100%;height:42px;padding:0 12px;border:1.5px solid var(--border);border-radius:12px;background:var(--surface);
+      color:var(--text);font-size:14px;font-family:inherit;outline:none}
+    .ed-in:focus{border-color:var(--accent)}
+    .ed-in:disabled{opacity:.45}
+    .ed-f.chg .ed-in{border-color:#ff4fd8;background:rgba(255,79,216,.06)}
+    .ed-f.chg label::after{content:' · 변경됨';color:#ff4fd8}
+    .ed-ac{display:none;max-height:168px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+    .ed-ac.show{display:block}
+    .ed-ac div{padding:8px 12px;font-size:13px;color:var(--text);border-bottom:1px solid var(--border);cursor:pointer;word-break:break-word}
+    .ed-ac div:last-child{border-bottom:none}
+    .ed-ac div:active{background:rgba(79,140,255,.15)}
+    .ed-ft{padding:10px 18px 14px;border-top:1px solid var(--border);flex-shrink:0}
+    .ed-note{font-size:11px;color:var(--text2);line-height:1.5}
     /* 상품 이미지 썸네일 (카드 오른쪽, 소비자가 아래) + 확대 보기
        오른쪽에 띄워서 왼쪽 글자 정렬은 이미지 없는 카드와 동일하게 유지 */
     /* 소비자가 + 썸네일을 한 묶음으로 오른쪽에 띄우고, 썸네일은 소비자가 아래 가운데 정렬 */
@@ -589,6 +631,34 @@
 </div>
 
 <!-- ══ 처리 결과 ══ -->
+<!-- 상품 정보 수정 1단계: 관리자 코드 확인 -->
+<div class="modal-bg" id="adminModal">
+  <div class="modal-box">
+    <h3>🔒 관리자 확인</h3>
+    <div class="ed-warn">⚠️ 상품 정보를 수정하면 <b>원본 시트(Data)의 값이 바로 변경</b>됩니다.<br>계속하려면 관리자 코드 4자리를 입력하세요.</div>
+    <input class="ed-pin" id="adminPin" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" oninput="adminPinInput(this)">
+    <div class="ed-err" id="adminErr"></div>
+    <div class="ed-btns">
+      <button class="ed-cancel" onclick="histBack()">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- 상품 정보 수정 2단계: 수정 팝업 -->
+<div class="ed-bg" id="editModal">
+  <div class="ed-box" id="editBox">
+    <div class="ed-hd"><h3>✏️ 상품 정보 수정</h3><span class="ed-code" id="editCode"></span><span class="ed-src" id="editSrc"></span></div>
+    <div class="ed-bd" id="editBody"></div>
+    <div class="ed-ft">
+      <div class="ed-note">변경한 항목(분홍색 표시)만 원본 시트에 반영됩니다. 품목코드는 수정할 수 없습니다.</div>
+      <div class="ed-btns">
+        <button class="ed-cancel" onclick="histBack()">취소</button>
+        <button class="ed-ok" id="editSaveBtn" onclick="saveEdit()" disabled>수정 저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 상품 이미지 확대 보기 (화면 아무 곳이나 터치하면 닫힘) -->
 <div class="img-viewer" id="imgViewer" onclick="closeImage()">
   <img id="imgViewerImg" alt="">
@@ -809,6 +879,7 @@ function renderResults(data,totalMatch){
     var d=data[i];
     h+='<div class="card" id="card-'+i+'"><div class="card-head"><input type="checkbox" class="card-cb" data-code="'+esc(d.itemCode)+'" onchange="updateSelCount()"><span class="code" onclick="copyCode(this)">'+esc(d.itemCode)+'</span>';
     if(d.itemLocation)h+='<span class="loc-tag">📍 '+esc(d.itemLocation)+'</span>';
+    h+='<span class="edit-btn" data-code="'+esc(d.itemCode)+'" onclick="startEdit(this)">수정</span>';
     h+='<span class="total">총 '+d.totalQty+'개</span></div><div class="card-body">';
     /* 이미지가 있으면 [썸네일 | 품목 정보] 2단 배치, 없으면 기존 모양 그대로 */
     var th=thumbHtml(d.itemName);
@@ -3058,6 +3129,10 @@ window.addEventListener('popstate',function(){
   var imgView=document.getElementById('imgViewer');
   if(imgView.classList.contains('show')){
     imgView.classList.remove('show'); /* 이미지 확대 보기가 가장 위 → 먼저 닫음 */
+  }else if(document.getElementById('editModal').classList.contains('show')){
+    document.getElementById('editModal').classList.remove('show');
+  }else if(document.getElementById('adminModal').classList.contains('show')){
+    document.getElementById('adminModal').classList.remove('show');
   }else if(adv.classList.contains('show')){
     adv.classList.remove('show');
   }else if(document.getElementById('consignModal').classList.contains('show')){
@@ -3184,6 +3259,212 @@ executeMove=function(){
   });
 };
 
+/* ══════════════════════════════════════
+   상품 정보 수정 (관리자 전용)
+   흐름: [수정] → 관리자 코드 확인(서버에서 비교) → 원본 값 불러오기 → 수정 팝업 → 저장(변경 항목만) → 메일 통지
+   ══════════════════════════════════════ */
+var ADMIN_KEEP_MIN=10;      /* 코드 확인 후 다시 묻지 않는 시간(분). 0이면 수정할 때마다 입력 */
+var adminCode='',adminAt=0; /* 메모리에만 보관 — 앱을 완전히 닫거나 새로 열면 사라짐 */
+var editTarget='',editCtx=null;
+/* 수정 팝업 항목 배치: [키, 칸 너비, 목록으로 쓸 재고 데이터 필드] */
+var EDIT_LAYOUT=[['BRAND','full','b'],['ITEM_NAME','full'],['ITEM_DESC','full'],['ITEM_TYPE','half','t'],['ITEM_SUBTYPE','half','u'],
+  ['GENDER','half','g'],['COLLECTION','half','k'],['COLOR_CODE','half'],['COLOR','half'],['SIZE','half'],['MATERIAL','half'],['PRICE','full']];
+
+function apiPost(payload){
+  return fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)})
+    .then(function(r){return r.json()});
+}
+function adminValid(){return !!adminCode&&ADMIN_KEEP_MIN>0&&(Date.now()-adminAt)<ADMIN_KEEP_MIN*60000}
+function procShow(msg){document.getElementById('procText').textContent=msg;document.getElementById('procOverlay').classList.add('show')}
+function procHide(){document.getElementById('procOverlay').classList.remove('show')}
+
+function startEdit(el){
+  editTarget=el.getAttribute('data-code')||'';
+  if(!editTarget)return;
+  if(adminValid()){loadEditor(adminCode,false);return}
+  openAdminModal('');
+}
+function openAdminModal(msg){
+  var pin=document.getElementById('adminPin');
+  pin.value='';
+  document.getElementById('adminErr').textContent=msg||'';
+  document.getElementById('adminModal').classList.add('show');
+  histPush();
+  setTimeout(function(){pin.focus()},200);
+}
+function adminPinInput(el){
+  el.value=el.value.replace(/\D/g,'').slice(0,4);
+  document.getElementById('adminErr').textContent='';
+  if(el.value.length===4)submitAdmin(); /* 4자리 입력되면 바로 확인 */
+}
+var adminBusy=false;
+function submitAdmin(){
+  if(adminBusy)return;
+  var v=document.getElementById('adminPin').value;
+  if(!/^\d{4}$/.test(v)){document.getElementById('adminErr').textContent='숫자 4자리를 입력해 주세요.';return}
+  loadEditor(v,true);
+}
+/* 코드 확인 + 원본 시트의 현재 값 불러오기 (서버 1회 호출) */
+function loadEditor(pin,fromModal){
+  adminBusy=true;
+  if(fromModal)document.getElementById('adminPin').blur();
+  procShow('상품 정보 불러오는 중...');
+  apiPost({action:'editLoad',admin:pin,itemCode:editTarget}).then(function(res){
+    adminBusy=false;procHide();
+    if(!res.success){alert('오류: '+(res.error||''));return}
+    if(!res.ok){
+      adminCode='';
+      if(fromModal){
+        var p=document.getElementById('adminPin');p.value='';
+        document.getElementById('adminErr').textContent=res.error||'관리자 코드가 일치하지 않습니다.';
+        setTimeout(function(){p.focus()},100);
+      }else openAdminModal(res.error||'관리자 코드를 다시 입력해 주세요.');
+      return;
+    }
+    adminCode=pin;adminAt=Date.now();
+    /* 코드 창에서 넘어온 경우 뒤로가기 기록 1칸을 그대로 이어서 사용 */
+    if(fromModal)document.getElementById('adminModal').classList.remove('show');else histPush();
+    openEditor(res);
+  }).catch(function(err){adminBusy=false;procHide();alert('서버 연결 실패: '+err.message)});
+}
+
+/* 재고 데이터에서 목록(브랜드·품목종류 등) 만들기 */
+function editOptions(recKey){
+  var seen={},out=[];
+  if(!inventory||!recKey)return out;
+  for(var i=0;i<inventory.length;i++){
+    var v=inventory[i][recKey];
+    if(v&&!seen[v]){seen[v]=1;out.push(v)}
+  }
+  out.sort(function(a,b){return String(a).localeCompare(String(b),'ko')});
+  return out;
+}
+function openEditor(res){
+  var byKey={};
+  for(var i=0;i<res.fields.length;i++)byKey[res.fields[i].key]=res.fields[i];
+  editCtx={code:res.itemCode,orig:{},opts:{}};
+  document.getElementById('editCode').textContent=res.itemCode;
+  document.getElementById('editSrc').textContent=res.sheet+' 시트 · '+res.row+'행';
+  var h='';
+  for(var j=0;j<EDIT_LAYOUT.length;j++){
+    var key=EDIT_LAYOUT[j][0],f=byKey[key];
+    if(!f)continue;
+    editCtx.orig[key]=f.value;
+    var hasList=!!EDIT_LAYOUT[j][2];
+    if(hasList)editCtx.opts[key]=editOptions(EDIT_LAYOUT[j][2]);
+    h+='<div class="ed-f '+EDIT_LAYOUT[j][1]+'" id="edf-'+key+'"><label>'+esc(f.label)+(f.note?' ('+esc(f.note)+')':'')+'</label>'+
+      '<input class="ed-in" type="text" data-key="'+key+'" value="'+esc(f.value)+'" autocomplete="off" autocapitalize="off" spellcheck="false"'+
+      (key==='PRICE'?' inputmode="numeric"':'')+(f.readonly?' disabled':'')+
+      ' oninput="editInput(this)"'+(hasList?' onfocus="editAcShow(this,true)" onblur="editAcHide(this)"':'')+'>'+
+      (hasList?'<div class="ed-ac" id="edac-'+key+'"></div>':'')+'</div>';
+  }
+  document.getElementById('editBody').innerHTML=h;
+  document.getElementById('editBody').scrollTop=0;
+  editRefresh();
+  document.getElementById('editModal').classList.add('show');
+}
+function editInput(el){
+  if(editCtx&&editCtx.opts[el.getAttribute('data-key')])editAcShow(el,false);
+  editRefresh();
+}
+/* 변경된 항목 표시 + 저장 버튼 건수 갱신 */
+function editChanges(){
+  var out={},ins=document.querySelectorAll('#editBody .ed-in');
+  for(var i=0;i<ins.length;i++){
+    if(ins[i].disabled)continue;
+    var k=ins[i].getAttribute('data-key'),v=ins[i].value.trim();
+    var same=(v===String(editCtx.orig[k]).trim());
+    document.getElementById('edf-'+k).classList.toggle('chg',!same);
+    if(!same)out[k]=v;
+  }
+  return out;
+}
+function editRefresh(){
+  var n=Object.keys(editChanges()).length,btn=document.getElementById('editSaveBtn');
+  btn.disabled=n===0;
+  btn.textContent=n?'수정 저장 ('+n+'건)':'수정 저장';
+}
+/* 목록 자동완성: 타이핑하면 포함하는 값만, 처음 눌렀을 때는 전체 목록 */
+function editAcShow(el,all){
+  var k=el.getAttribute('data-key'),list=document.getElementById('edac-'+k),opts=editCtx.opts[k]||[];
+  var q=all?'':el.value.trim().toLowerCase(),h='',n=0;
+  for(var i=0;i<opts.length&&n<40;i++){
+    var o=String(opts[i]);
+    if(q&&o.toLowerCase().indexOf(q)<0)continue;
+    if(o===el.value)continue;
+    h+='<div data-k="'+k+'" data-v="'+esc(o)+'" onclick="editAcPick(this)">'+esc(o)+'</div>';n++;
+  }
+  list.innerHTML=h;
+  list.classList.toggle('show',n>0);
+}
+function editAcHide(el){
+  var list=document.getElementById('edac-'+el.getAttribute('data-key'));
+  setTimeout(function(){if(list)list.classList.remove('show')},250); /* 목록 항목 터치가 먼저 처리되도록 잠시 뒤에 닫음 */
+}
+function editAcPick(item){
+  var k=item.getAttribute('data-k'),el=document.querySelector('#editBody .ed-in[data-key="'+k+'"]');
+  el.value=item.getAttribute('data-v');
+  document.getElementById('edac-'+k).classList.remove('show');
+  editRefresh();
+}
+
+var editBusy=false;
+function saveEdit(){
+  if(editBusy||!editCtx)return;
+  var ch=editChanges(),keys=Object.keys(ch);
+  if(!keys.length)return;
+  var lines=[],orig={};
+  for(var i=0;i<keys.length;i++){
+    var k=keys[i],label=document.querySelector('#edf-'+k+' label').firstChild.nodeValue;
+    orig[k]=editCtx.orig[k];
+    lines.push('· '+label+': '+(editCtx.orig[k]===''?'(빈칸)':editCtx.orig[k])+' → '+(ch[k]===''?'(빈칸)':ch[k]));
+  }
+  if(!window.confirm('품목코드 '+editCtx.code+'\n\n'+lines.join('\n')+'\n\n위 내용으로 원본 시트를 수정하시겠습니까?'))return;
+  editBusy=true;procShow('수정 내용 저장 중...');
+  apiPost({action:'editSave',admin:adminCode,itemCode:editCtx.code,changes:ch,orig:orig}).then(function(res){
+    editBusy=false;procHide();
+    if(!res.success){alert('저장 실패: '+(res.error||''));return}
+    if(!res.ok){adminCode='';alert(res.error||'관리자 코드를 다시 확인해 주세요.');return}
+    adminAt=Date.now();
+    applyEditLocal(res);
+    histBack(); /* 수정 팝업 닫기 */
+    var n=(res.changed||[]).length;
+    showToast(n?('수정 완료 ('+n+'건)'+(res.mailSent?'':' · 메일 발송 실패')):'변경된 내용이 없습니다');
+    if(n&&!res.mailSent&&res.mailError)console.warn('[EDIT] 메일 발송 실패:',res.mailError);
+  }).catch(function(err){editBusy=false;procHide();alert('서버 연결 실패: '+err.message)});
+}
+/* 저장 결과를 앱 화면에 바로 반영 (다음 새로고침 전까지 임시 표시) */
+function applyEditLocal(res){
+  var a=res.after||{};
+  if(!res.changed||!res.changed.length||a.ITEM_NAME===undefined)return;
+  var join=function(x,y,old){var sep=(old&&String(old).indexOf('\n')>=0)?'\n':' ';return [x,y].filter(function(v){return v}).join(sep)};
+  var rec=null;
+  if(inventory)for(var i=0;i<inventory.length;i++){if(inventory[i].c===res.itemCode){rec=inventory[i];break}}
+  var color=join(a.COLOR_CODE,a.COLOR,rec&&rec.r),size=join(a.SIZE,res.sdSize,rec&&rec.s);
+  if(rec){
+    rec.b=a.BRAND;rec.m=a.ITEM_NAME;rec.d=a.ITEM_DESC;rec.t=a.ITEM_TYPE;rec.u=a.ITEM_SUBTYPE;
+    rec.g=a.GENDER;rec.k=a.COLLECTION;rec.r=color;rec.s=size;rec.v=a.PRICE;
+    buildNameIndex();
+  }
+  var hit=false;
+  for(var j=0;j<lastSearchData.length;j++){
+    var d=lastSearchData[j];
+    if(d.itemCode!==res.itemCode)continue;
+    d.brand=a.BRAND;d.itemName=a.ITEM_NAME;d.itemDesc=a.ITEM_DESC;d.gender=a.GENDER;d.color=color;d.size=size;d.price=a.PRICE;hit=true;
+  }
+  if(!hit)return;
+  /* 검색 결과를 다시 그리되 상단 문구·스크롤 위치·체크 상태는 유지 */
+  var keepStatus=statusEl.innerHTML,keepTop=resultsEl.scrollTop,checked={},all=document.getElementById('selectAllCb').checked;
+  var cbs=document.querySelectorAll('.card-cb:checked');
+  for(var c=0;c<cbs.length;c++)checked[cbs[c].getAttribute('data-code')]=1;
+  renderResults(lastSearchData,lastSearchData.length);
+  statusEl.innerHTML=keepStatus;resultsEl.scrollTop=keepTop;
+  var ncb=document.querySelectorAll('.card-cb');
+  for(var e=0;e<ncb.length;e++)if(checked[ncb[e].getAttribute('data-code')])ncb[e].checked=true;
+  document.getElementById('selectAllCb').checked=all;
+  if(typeof updateSelCount==='function')updateSelCount();
+}
+
 function toggleDetail(id){
   var el=document.getElementById(id);
   if(el)el.classList.toggle('show');
@@ -3199,6 +3480,13 @@ function closeResult(){
 if(window.visualViewport){
   var modalBox=null;
   window.visualViewport.addEventListener('resize',function(){
+    /* 수정 팝업: 키보드가 올라오면 보이는 영역 높이에 맞춰 줄임 (입력칸이 키보드에 가려지지 않게) */
+    var eb=document.getElementById('editModal'),ebox=document.getElementById('editBox');
+    if(eb&&eb.classList.contains('show')){
+      var kb=window.innerHeight-window.visualViewport.height;
+      if(kb>100){eb.style.height=window.visualViewport.height+'px';eb.style.bottom='auto';ebox.style.maxHeight=(window.visualViewport.height-20)+'px'}
+      else{eb.style.height='';eb.style.bottom='';ebox.style.maxHeight=''}
+    }
     modalBox=document.querySelector('.modal-bg.show .modal-box');
     if(!modalBox)return;
     var kbHeight=window.innerHeight-window.visualViewport.height;
