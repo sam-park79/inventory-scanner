@@ -175,6 +175,8 @@
     .ed-ac div:active{background:rgba(79,140,255,.15)}
     .ed-ft{padding:10px 18px 14px;border-top:1px solid var(--border);flex-shrink:0}
     .ed-note{font-size:11px;color:var(--text2);line-height:1.5}
+    /* 키보드가 올라와 있는 동안은 하단(안내문·취소·저장) 숨김 → 입력칸이 가려지지 않게 */
+    .ed-box.kb .ed-ft{display:none}
     /* 상품 이미지 썸네일 (카드 오른쪽, 소비자가 아래) + 확대 보기
        오른쪽에 띄워서 왼쪽 글자 정렬은 이미지 없는 카드와 동일하게 유지 */
     /* 소비자가 + 썸네일을 한 묶음으로 오른쪽에 띄우고, 썸네일은 소비자가 아래 가운데 정렬 */
@@ -3360,6 +3362,7 @@ function openEditor(res){
   }
   document.getElementById('editBody').innerHTML=h;
   document.getElementById('editBody').scrollTop=0;
+  editKb(false);
   editRefresh();
   document.getElementById('editModal').classList.add('show');
 }
@@ -3408,6 +3411,23 @@ function editAcPick(item){
   editRefresh();
 }
 
+/* 키보드 표시 중 하단 버튼 숨김/복원 */
+function editKb(on){
+  var box=document.getElementById('editBox');
+  if(box)box.classList.toggle('kb',!!on);
+}
+document.addEventListener('focusin',function(e){
+  if(e.target&&e.target.classList&&e.target.classList.contains('ed-in'))editKb(true);
+});
+document.addEventListener('focusout',function(e){
+  if(!(e.target&&e.target.classList&&e.target.classList.contains('ed-in')))return;
+  /* 다른 입력칸으로 옮겨가는 중이면 유지, 입력을 마쳤으면 버튼 복원 */
+  setTimeout(function(){
+    var a=document.activeElement;
+    if(!(a&&a.classList&&a.classList.contains('ed-in')))editKb(false);
+  },200);
+});
+
 var editBusy=false;
 function saveEdit(){
   if(editBusy||!editCtx)return;
@@ -3429,8 +3449,9 @@ function saveEdit(){
     applyEditLocal(res);
     histBack(); /* 수정 팝업 닫기 */
     var n=(res.changed||[]).length;
-    showToast(n?('수정 완료 ('+n+'건)'+(res.mailSent?'':' · 메일 발송 실패')):'변경된 내용이 없습니다');
-    if(n&&!res.mailSent&&res.mailError)console.warn('[EDIT] 메일 발송 실패:',res.mailError);
+    showToast(n?('수정 완료 ('+n+'건)'):'변경된 내용이 없습니다');
+    /* 메일이 안 나갔으면 사유를 화면에 표시 (시트 수정 자체는 완료된 상태) */
+    if(n&&!res.mailSent)setTimeout(function(){alert('시트 수정은 완료됐지만 알림 메일을 보내지 못했습니다.\n\n사유: '+(res.mailError||'알 수 없음'))},400);
   }).catch(function(err){editBusy=false;procHide();alert('서버 연결 실패: '+err.message)});
 }
 /* 저장 결과를 앱 화면에 바로 반영 (다음 새로고침 전까지 임시 표시) */
@@ -3484,8 +3505,10 @@ if(window.visualViewport){
     var eb=document.getElementById('editModal'),ebox=document.getElementById('editBox');
     if(eb&&eb.classList.contains('show')){
       var kb=window.innerHeight-window.visualViewport.height;
-      if(kb>100){eb.style.height=window.visualViewport.height+'px';eb.style.bottom='auto';ebox.style.maxHeight=(window.visualViewport.height-20)+'px'}
-      else{eb.style.height='';eb.style.bottom='';ebox.style.maxHeight=''}
+      if(kb>100){eb.style.height=window.visualViewport.height+'px';eb.style.bottom='auto';ebox.style.maxHeight=(window.visualViewport.height-20)+'px';
+        editKb(true)}
+      else{eb.style.height='';eb.style.bottom='';ebox.style.maxHeight='';
+        editKb(false)} /* 키보드가 내려가면(안드로이드 뒤로가기 포함) 하단 버튼 다시 표시 */
     }
     modalBox=document.querySelector('.modal-bg.show .modal-box');
     if(!modalBox)return;
