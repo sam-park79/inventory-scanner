@@ -135,7 +135,10 @@
     .card-body{padding:10px 14px 12px;display:flow-root}
     /* 상품 이미지 썸네일 (카드 오른쪽, 소비자가 아래) + 확대 보기
        오른쪽에 띄워서 왼쪽 글자 정렬은 이미지 없는 카드와 동일하게 유지 */
-    .thumb{float:right;clear:right;margin:2px 0 4px 10px;width:84px;height:104px;border-radius:10px;overflow:hidden;background:#fff;
+    /* 소비자가 + 썸네일을 한 묶음으로 오른쪽에 띄우고, 썸네일은 소비자가 아래 가운데 정렬 */
+    .card-side{float:right;margin:0 0 6px 10px;display:flex;flex-direction:column;align-items:center;gap:12px}
+    .card-side .price-tag{float:none;margin:0}
+    .thumb{width:84px;height:104px;border-radius:10px;overflow:hidden;background:#fff;
       border:1px solid var(--border);cursor:zoom-in;-webkit-tap-highlight-color:transparent}
     .thumb img{width:100%;height:100%;object-fit:cover;display:block}
     .thumb:active{opacity:.7}
@@ -809,8 +812,9 @@ function renderResults(data,totalMatch){
     h+='<span class="total">총 '+d.totalQty+'개</span></div><div class="card-body">';
     /* 이미지가 있으면 [썸네일 | 품목 정보] 2단 배치, 없으면 기존 모양 그대로 */
     var th=thumbHtml(d.itemName);
-    if(d.price)h+='<span class="price-tag"><span class="pt-label">소비자가</span><span class="pt-value">'+formatPrice(d.price)+'원</span></span>';
-    h+=th; /* 소비자가 바로 아래, 오른쪽 */
+    var pt=d.price?'<span class="price-tag"><span class="pt-label">소비자가</span><span class="pt-value">'+formatPrice(d.price)+'원</span></span>':'';
+    /* 이미지가 있으면 [소비자가 + 썸네일] 묶음, 없으면 기존처럼 소비자가만 */
+    h+=th?'<div class="card-side">'+pt+th+'</div>':pt;
     h+=field('브랜드',d.brand)+'<div class="field"><span class="label">품목명</span><span class="value name-copy" onclick="copyCode(this)">'+esc(d.itemName||'-')+'</span></div>'+(d.itemDesc?field('품목설명',d.itemDesc):'');
     if(d.gender)h+='<div class="field"><span class="label">성별</span><span class="gender-tag '+genderClass(d.gender)+'">'+esc(d.gender)+'</span></div>';
     var vc=hasVariants(d,'color');
