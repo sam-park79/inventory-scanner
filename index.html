@@ -3449,6 +3449,7 @@ function saveEdit(){
     applyEditLocal(res);
     histBack(); /* 수정 팝업 닫기 */
     var n=(res.changed||[]).length;
+    if(n)confirmFeedback(); /* 수정 완료 알림: 비프음 + 진동 (스캔 인식과 동일) */
     showToast(n?('수정 완료 ('+n+'건)'):'변경된 내용이 없습니다');
     /* 메일이 안 나갔으면 사유를 화면에 표시 (시트 수정 자체는 완료된 상태) */
     if(n&&!res.mailSent)setTimeout(function(){alert('시트 수정은 완료됐지만 알림 메일을 보내지 못했습니다.\n\n사유: '+(res.mailError||'알 수 없음'))},400);
