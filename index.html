@@ -133,6 +133,20 @@
     .card-head .loc-tag{font-size:11px;font-weight:600;color:var(--orange);background:rgba(251,191,36,.12);padding:2px 8px;border-radius:6px}
     .card-head .total{font-size:12px;font-weight:600;color:var(--green);margin-left:auto}
     .card-body{padding:10px 14px 12px}
+    /* 상품 이미지 썸네일 (카드 왼쪽) + 확대 보기 */
+    .cb-row{display:flex;gap:12px;align-items:flex-start}
+    .cb-main{flex:1;min-width:0}
+    .thumb{flex-shrink:0;width:72px;height:96px;border-radius:10px;overflow:hidden;background:#fff;
+      border:1px solid var(--border);cursor:zoom-in;-webkit-tap-highlight-color:transparent}
+    .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .thumb:active{opacity:.7}
+    .img-viewer{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.92);display:none;
+      align-items:center;justify-content:center;flex-direction:column;gap:12px;
+      padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom))}
+    .img-viewer.show{display:flex}
+    .img-viewer img{max-width:100%;max-height:82vh;object-fit:contain;border-radius:12px;background:#fff}
+    .img-viewer .iv-cap{color:#fff;font-size:13px;font-weight:600;text-align:center;word-break:break-word}
+    .img-viewer .iv-hint{color:rgba(255,255,255,.55);font-size:11px}
     .field{display:flex;margin-bottom:4px;align-items:baseline}.field .label{min-width:52px;flex-shrink:0;font-size:11px;font-weight:600;color:var(--text2)}
     .field .value{font-size:13px;color:var(--text);word-break:break-word;display:flex;align-items:center;flex-wrap:wrap;gap:4px}
     .field .value.name-copy{cursor:pointer;display:inline-block}
@@ -572,6 +586,13 @@
 </div>
 
 <!-- ══ 처리 결과 ══ -->
+<!-- 상품 이미지 확대 보기 (화면 아무 곳이나 터치하면 닫힘) -->
+<div class="img-viewer" id="imgViewer" onclick="closeImage()">
+  <img id="imgViewerImg" alt="">
+  <div class="iv-cap" id="imgViewerCap"></div>
+  <div class="iv-hint">화면을 터치하면 닫힙니다</div>
+</div>
+
 <div class="result-overlay" id="resultOverlay">
   <div class="result-box">
     <div class="result-icon" id="resultIcon">✅</div>
@@ -667,6 +688,8 @@ function loadData(forceRefresh){
     dataLoading=false;
     if(!res.success){dataStatusEl.textContent='로드 실패: '+res.error;dataStatusEl.className='data-status er';return}
     inventory=res.data;
+    imageMap=res.images||{}; /* 품목명 → 이미지 파일 ID */
+    if(res.debug&&res.debug.imageError)console.warn('[IMAGE] 이미지 목록 로드 실패:',res.debug.imageError);
     buildNameIndex();
     if(res.debug)console.log('[DEBUG] 헤더 인덱스:',JSON.stringify(res.debug.idx),'\n헤더 목록:',res.debug.headers);
     var t=new Date();dataStatusEl.textContent='✓ '+res.count+'건 ('+t.getHours()+':'+String(t.getMinutes()).replace(/^(\d)$/,'0$1')+')';
@@ -722,6 +745,50 @@ function doSearch(){
   renderResults(res,totalMatch);
 }
 
+/* ── 상품 이미지 ──
+   서버가 준 imageMap(품목명 → 구글 드라이브 파일 ID)으로 썸네일/확대 이미지 주소를 만듦 */
+var imageMap={};
+function imgKey(name){return String(name==null?'':name).trim().replace(/\s+/g,' ').toLowerCase()}
+function imgIdFor(name){
+  var id=imageMap[imgKey(name)];
+  return (id&&/^[A-Za-z0-9_-]+$/.test(id))?id:'';
+}
+function imgUrl(id,w,alt){
+  return alt?'https://lh3.googleusercontent.com/d/'+id+'=w'+w
+            :'https://drive.google.com/thumbnail?id='+id+'&sz=w'+w;
+}
+/* 썸네일 로드 실패: 예비 주소로 1회 재시도, 그래도 실패하면 썸네일 칸을 숨김 */
+function imgFail(el){
+  var id=el.getAttribute('data-id');
+  if(!el.getAttribute('data-fb')){el.setAttribute('data-fb','1');el.src=imgUrl(id,200,true);return}
+  if(el.parentNode)el.parentNode.style.display='none';
+}
+function thumbHtml(name){
+  var id=imgIdFor(name);
+  if(!id)return '';
+  return '<div class="thumb" data-id="'+id+'" data-name="'+esc(name||'')+'" onclick="openImage(this)">'+
+    '<img loading="lazy" decoding="async" referrerpolicy="no-referrer" alt="" data-id="'+id+'" src="'+imgUrl(id,200)+'" onerror="imgFail(this)"></div>';
+}
+function openImage(el){
+  var id=el.getAttribute('data-id');if(!id)return;
+  var view=document.getElementById('imgViewer'),big=document.getElementById('imgViewerImg');
+  var small=el.querySelector('img');
+  /* 먼저 이미 받아둔 썸네일을 크게 보여주고, 큰 이미지가 준비되면 교체 */
+  big.src=small?small.src:imgUrl(id,200);
+  big.setAttribute('data-id',id);
+  document.getElementById('imgViewerCap').textContent=el.getAttribute('data-name')||'';
+  var useAlt=small&&small.getAttribute('data-fb');
+  var pre=new Image();pre.referrerPolicy='no-referrer';
+  pre.onload=function(){if(big.getAttribute('data-id')===id&&view.classList.contains('show'))big.src=pre.src};
+  pre.src=imgUrl(id,1200,!!useAlt);
+  view.classList.add('show');
+  histPush();
+}
+function closeImage(){
+  /* 뒤로가기와 같은 경로로 닫음 (popstate 에서 실제로 숨김) */
+  if(historyDepth>0)histBack();else document.getElementById('imgViewer').classList.remove('show');
+}
+
 function renderResults(data,totalMatch){
   if(!data.length){statusEl.textContent='검색 결과가 없습니다.';
     document.getElementById('selectAllBar').style.display='none';
@@ -740,6 +807,9 @@ function renderResults(data,totalMatch){
     h+='<div class="card" id="card-'+i+'"><div class="card-head"><input type="checkbox" class="card-cb" data-code="'+esc(d.itemCode)+'" onchange="updateSelCount()"><span class="code" onclick="copyCode(this)">'+esc(d.itemCode)+'</span>';
     if(d.itemLocation)h+='<span class="loc-tag">📍 '+esc(d.itemLocation)+'</span>';
     h+='<span class="total">총 '+d.totalQty+'개</span></div><div class="card-body">';
+    /* 이미지가 있으면 [썸네일 | 품목 정보] 2단 배치, 없으면 기존 모양 그대로 */
+    var th=thumbHtml(d.itemName);
+    if(th)h+='<div class="cb-row">'+th+'<div class="cb-main">';
     if(d.price)h+='<span class="price-tag"><span class="pt-label">소비자가</span><span class="pt-value">'+formatPrice(d.price)+'원</span></span>';
     h+=field('브랜드',d.brand)+'<div class="field"><span class="label">품목명</span><span class="value name-copy" onclick="copyCode(this)">'+esc(d.itemName||'-')+'</span></div>'+(d.itemDesc?field('품목설명',d.itemDesc):'');
     if(d.gender)h+='<div class="field"><span class="label">성별</span><span class="gender-tag '+genderClass(d.gender)+'">'+esc(d.gender)+'</span></div>';
@@ -751,6 +821,7 @@ function renderResults(data,totalMatch){
     h+='<div class="field"><span class="label">사이즈</span><span class="value">'+esc(d.size||'-');
     if(vs)h+=' <button class="var-btn" onclick="toggleVariants('+i+',\'size\')">다른 사이즈</button>';
     h+='</span></div>';
+    if(th)h+='</div></div>';
     if(d.locations.length){h+='<div class="loc-row">';
       for(var j=0;j<d.locations.length;j++)h+='<div class="loc-chip"><span class="loc-name">'+esc(d.locations[j].name)+'</span><span class="loc-qty">'+d.locations[j].qty+'</span></div>';
       h+='</div>'}else h+='<div class="no-stock">재고 없음</div>';
@@ -2981,7 +3052,10 @@ window.addEventListener('popstate',function(){
   var review=document.getElementById('reviewOverlay');
   var scanner=document.getElementById('scannerOverlay');
 
-  if(adv.classList.contains('show')){
+  var imgView=document.getElementById('imgViewer');
+  if(imgView.classList.contains('show')){
+    imgView.classList.remove('show'); /* 이미지 확대 보기가 가장 위 → 먼저 닫음 */
+  }else if(adv.classList.contains('show')){
     adv.classList.remove('show');
   }else if(document.getElementById('consignModal').classList.contains('show')){
     document.getElementById('consignModal').classList.remove('show');
