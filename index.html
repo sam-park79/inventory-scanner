@@ -1599,7 +1599,9 @@ function isValidCode(code){
     return /^\d{13}$/.test(code);
   }
   /* 1D 바코드: 토글 ON은 12자 이상 영숫자 (짧은 부정확 디코드 차단), 토글 OFF는 정확히 13자리 숫자 */
-  if(allFormatsMode)return code.length>=12&&/^[A-Za-z0-9_\-]+$/.test(code);
+  /* [변경] 최소 길이 12 → 8: 10자리 Code 128 태그(예: 2025092811)가 걸러지던 문제.
+     12자 제한은 EAN-8/UPC-E 리더의 8자리 오인식 때문에 넣었던 것인데 해당 리더는 이미 제거됨 */
+  if(allFormatsMode)return code.length>=8&&/^[A-Za-z0-9_\-]+$/.test(code);
   /* 토글 OFF: 정확히 13자리 숫자 (Code 128 13자리도 통과해야 하므로 EAN 체크섬은 여기서 검사하지 않음.
      EAN-13은 자체 디코더(_eanDecodeRuns)가 체크섬까지 검증) */
   return /^\d{13}$/.test(code);
@@ -2807,7 +2809,7 @@ function _attachQuaggaHandlers(){
        (얇게 인쇄된 태그에서 Quagga가 6445000078965를 0401200078965로 오인식, 체크섬도 우연히 통과) */
     var fmt=(result.codeResult&&result.codeResult.format)||'';
     if(/^(ean|upc)/.test(fmt))return;
-    if(c.length<12)return; /* 12자 미만 디코드는 짧은 부정확 결과 가능성 높음 */
+    if(c.length<8)return; /* 8자 미만 디코드는 짧은 부정확 결과 가능성 높음 (12 → 8: 10자리 Code 128 허용) */
     lastDecodedIsQR=false;
     onCodeRead(c);
   });
